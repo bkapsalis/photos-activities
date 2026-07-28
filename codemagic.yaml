@@ -1,0 +1,118 @@
+workflows:
+  # ── Dev Build ──────────────────────────────────────────
+  dev-build:
+    name: Dev Build
+    max_build_duration: 30
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: dev
+          include: true
+    environment:
+      flutter: stable
+      groups:
+        - firebase_credentials
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze --no-fatal-infos
+      - name: Run tests
+        script: flutter test
+      - name: Build Android APK (Dev)
+        script: flutter build apk --flavor dev -t lib/main_dev.dart --debug
+      - name: Build Web (Dev)
+        script: flutter build web -t lib/main_dev.dart
+    artifacts:
+      - build/app/outputs/flutter-apk/app-dev-debug.apk
+      - build/web/**
+
+  # ── Staging Build ──────────────────────────────────────
+  staging-build:
+    name: Staging Build
+    max_build_duration: 60
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: staging
+          include: true
+    environment:
+      flutter: stable
+      groups:
+        - firebase_credentials
+        - android_signing
+        - ios_signing
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze --no-fatal-infos
+      - name: Run tests
+        script: flutter test
+      - name: Build Android APK (Staging)
+        script: flutter build apk --flavor staging -t lib/main_staging.dart --release
+      - name: Build iOS (Staging)
+        script: |
+          flutter build ipa --flavor staging -t lib/main_staging.dart --release \
+            --export-options-plist=/tmp/ExportOptions.plist
+      - name: Build Web (Staging)
+        script: flutter build web -t lib/main_staging.dart
+    artifacts:
+      - build/app/outputs/flutter-apk/app-staging-release.apk
+      - build/ios/ipa/*.ipa
+      - build/web/**
+    publishing:
+      firebase:
+        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
+        android:
+          app_id: $FIREBASE_ANDROID_APP_ID_STAGING
+          groups:
+            - internal-testers
+
+  # ── Production Release ─────────────────────────────────
+  prod-release:
+    name: Production Release
+    max_build_duration: 60
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    environment:
+      flutter: stable
+      groups:
+        - firebase_credentials
+        - android_signing
+        - ios_signing
+        - play_store
+        - app_store
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze --no-fatal-infos
+      - name: Run tests
+        script: flutter test
+      - name: Build Android App Bundle (Prod)
+        script: flutter build appbundle --flavor prod -t lib/main_prod.dart --release
+      - name: Build iOS (Prod)
+        script: |
+          flutter build ipa --flavor prod -t lib/main_prod.dart --release \
+            --export-options-plist=/tmp/ExportOptions.plist
+      - name: Build Web (Prod)
+        script: flutter build web -t lib/main_prod.dart
+    artifacts:
+      - build/app/outputs/bundle/prodRelease/app-prod-release.aab
+      - build/ios/ipa/*.ipa
+      - build/web/**
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: production
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_ID
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
