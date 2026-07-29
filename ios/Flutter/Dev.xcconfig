@@ -1,0 +1,4 @@
+// Dev flavor configuration
+PRODUCT_BUNDLE_IDENTIFIER = com.billsbayarea.app.dev
+PRODUCT_NAME = Bills Bay Area Dev
+DISPLAY_NAME = Bills Bay Area (Dev)
