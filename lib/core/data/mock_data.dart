@@ -182,7 +182,7 @@ class MockComments {
 
 // ── Categories ─────────────────────────────────────────
 
-const List<String> categories = ['Hiking', 'Museums', 'Historical Sites'];
+const List<String> categories = ['Hiking', 'Museums', 'Historic Sites'];
 
 // ── Community Stats ────────────────────────────────────
 

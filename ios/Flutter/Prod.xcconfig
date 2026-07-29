@@ -1,4 +1,4 @@
 // Prod flavor configuration
 PRODUCT_BUNDLE_IDENTIFIER = com.billsbayarea.app
-PRODUCT_NAME = Bills Bay Area
-DISPLAY_NAME = Bills Bay Area
+PRODUCT_NAME = BillsFunThings
+DISPLAY_NAME = Bill's Fun Things

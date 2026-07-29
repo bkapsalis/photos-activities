@@ -93,11 +93,11 @@ class _WebTopNav extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Bills Bay Area',
+                'Bill\'s Fun Things To Do',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               Text(
-                'Fun Things To Do!',
+                'In The Bay Area!',
                 style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
               ),
             ],

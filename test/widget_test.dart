@@ -6,10 +6,10 @@ void main() {
   testWidgets('App renders without error', (WidgetTester tester) async {
     EnvConfig.init(EnvConfig(
       environment: Environment.dev,
-      title: 'Bills Bay Area (Test)',
+      title: "Bill's Fun Things To Do In The Bay Area! (Test)",
       firebaseProjectId: 'test-project',
     ));
     await tester.pumpWidget(const BillsBayAreaApp());
-    expect(find.text('Bills Bay Area 🏔'), findsOneWidget);
+    expect(find.text("Bill's Fun Things To Do In The Bay Area! \u{1F3D4}"), findsOneWidget);
   });
 }

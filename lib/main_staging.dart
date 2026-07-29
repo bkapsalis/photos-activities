@@ -6,7 +6,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   EnvConfig.init(EnvConfig(
     environment: Environment.staging,
-    title: "Bills Bay Area (Staging)",
+    title: "Bill's Fun Things To Do In The Bay Area! (Staging)",
     firebaseProjectId: "Photos-Activity-staging",
   ));
 

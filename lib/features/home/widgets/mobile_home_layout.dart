@@ -37,7 +37,7 @@ class MobileHomeLayout extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Discover',
+                        'Discover Bay Area',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -45,7 +45,7 @@ class MobileHomeLayout extends StatelessWidget {
                         ),
                       ),
                       const Text(
-                        'Bills Bay Area 🏔',
+                        "Bill's Fun Things To Do In The Bay Area! 🏔",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
