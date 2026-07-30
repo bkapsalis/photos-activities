@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options_staging.dart';
 import 'core/config/env_config.dart';
 import 'app.dart';
 
@@ -7,11 +9,12 @@ void main() async {
   EnvConfig.init(EnvConfig(
     environment: Environment.staging,
     title: "Bill's Fun Things To Do In The Bay Area! (Staging)",
-    firebaseProjectId: "Photos-Activity-staging",
+    firebaseProjectId: "photos-activities-staging",
   ));
 
-  // TODO: Firebase init after running flutterfire configure
-  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   runApp(const BillsBayAreaApp());
 }

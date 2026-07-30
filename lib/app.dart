@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/env_config.dart';
 import 'features/home/home_screen.dart';
 import 'features/location_chat/location_chat_screen.dart';
 import 'features/picture_chat/picture_chat_screen.dart';
+import 'features/auth/sign_in_screen.dart';
 
 class BillsBayAreaApp extends StatelessWidget {
   const BillsBayAreaApp({super.key});
@@ -14,7 +16,40 @@ class BillsBayAreaApp extends StatelessWidget {
       title: EnvConfig.instance.title,
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: EnvConfig.instance.isDev,
-      home: const _AppShell(),
+      home: const _AuthGate(),
+    );
+  }
+}
+
+/// Routes unauthenticated users to the sign-in screen,
+/// authenticated users to the main app.
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Still loading auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // Not signed in → show sign-in screen
+        if (!snapshot.hasData) {
+          return SignInScreen(
+            onSignedIn: () {
+              // StreamBuilder will automatically rebuild
+            },
+          );
+        }
+
+        // Signed in → show app
+        return const _AppShell();
+      },
     );
   }
 }

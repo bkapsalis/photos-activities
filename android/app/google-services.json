@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "978335208017",
+    "project_id": "photos-activities-prod",
+    "storage_bucket": "photos-activities-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:978335208017:android:6a85cf7cff319cc6e79e70",
+        "android_client_info": {
+          "package_name": "com.billsbayarea.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHU6RWVCJr9MMoTJi7etYNRfKesDfnngs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
