@@ -69,6 +69,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '978335208017',
     projectId: 'photos-activities-prod',
     storageBucket: 'photos-activities-prod.firebasestorage.app',
+    androidClientId: '978335208017-apbupuh9aekkfhq4jnitibaj25uuhd7l.apps.googleusercontent.com',
+    iosClientId: '978335208017-ktkgne3aj7uqmu147unpk0imghq7d8g9.apps.googleusercontent.com',
     iosBundleId: 'com.billsbayarea.app',
   );
 }

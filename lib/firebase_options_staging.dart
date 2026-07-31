@@ -68,6 +68,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '593867148848',
     projectId: 'photos-activities-staging',
     storageBucket: 'photos-activities-staging.firebasestorage.app',
+    androidClientId: '593867148848-n93irrju31800s4qskjpvakdaiapedq0.apps.googleusercontent.com',
+    iosClientId: '593867148848-30q82vr5tn1vq958nkjdopakhsch3i7u.apps.googleusercontent.com',
     iosBundleId: 'com.billsbayarea.app.staging',
   );
 }

@@ -12,7 +12,20 @@
           "package_name": "com.billsbayarea.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "978335208017-apbupuh9aekkfhq4jnitibaj25uuhd7l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.billsbayarea.app",
+            "certificate_hash": "b14863e55aee2075788710c0abfc616fdf8bd9de"
+          }
+        },
+        {
+          "client_id": "978335208017-u5bvv9gmbvlas81dmh3i0subm3havcu7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCHU6RWVCJr9MMoTJi7etYNRfKesDfnngs"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "978335208017-u5bvv9gmbvlas81dmh3i0subm3havcu7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "978335208017-ktkgne3aj7uqmu147unpk0imghq7d8g9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.billsbayarea.app"
+              }
+            }
+          ]
         }
       }
     }
