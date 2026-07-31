@@ -62,13 +62,14 @@ class DefaultFirebaseOptions {
     projectId: 'photos-activities-dev',
     storageBucket: 'photos-activities-dev.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDTckDCf5paqwTKC5pQrDhZET6ZmsT8DBU',
     appId: '1:1036671893175:ios:1a2183343110786a3bd732',
     messagingSenderId: '1036671893175',
     projectId: 'photos-activities-dev',
     storageBucket: 'photos-activities-dev.firebasestorage.app',
+    androidClientId: '1036671893175-rk201p3io483nhfffn26mt01ccrvdinq.apps.googleusercontent.com',
+    iosClientId: '1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg.apps.googleusercontent.com',
     iosBundleId: 'com.billsbayarea.app.dev',
   );
 }

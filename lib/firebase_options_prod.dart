@@ -63,7 +63,6 @@ class DefaultFirebaseOptions {
     projectId: 'photos-activities-prod',
     storageBucket: 'photos-activities-prod.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDXClf2-of81jp16rYSXE7dp2hu3kh3u0g',
     appId: '1:978335208017:ios:950d1ff7ba059507e79e70',

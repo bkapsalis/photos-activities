@@ -1,8 +1,1 @@
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  }
-}
+{"firestore":{"rules":"firestore.rules"},"storage":{"rules":"storage.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"photos-activities-prod","appId":"1:978335208017:android:6a85cf7cff319cc6e79e70","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"photos-activities-prod","appId":"1:978335208017:ios:950d1ff7ba059507e79e70","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options_dev.dart":{"projectId":"photos-activities-dev","configurations":{"android":"1:1036671893175:android:15e319db2a7671963bd732","ios":"1:1036671893175:ios:1a2183343110786a3bd732","web":"1:1036671893175:web:d8044e2b63db21433bd732"}},"lib/firebase_options_staging.dart":{"projectId":"photos-activities-staging","configurations":{"android":"1:593867148848:android:afaf2244424d0b8022a7f5","ios":"1:593867148848:ios:2e0e6206814cb4d722a7f5","web":"1:593867148848:web:84b260f0df3fadfa22a7f5"}},"lib/firebase_options_prod.dart":{"projectId":"photos-activities-prod","configurations":{"android":"1:978335208017:android:6a85cf7cff319cc6e79e70","ios":"1:978335208017:ios:950d1ff7ba059507e79e70","web":"1:978335208017:web:dfc6a7677b05a50de79e70"}}}}}}
