@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "593867148848",
+    "project_id": "photos-activities-staging",
+    "storage_bucket": "photos-activities-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593867148848:android:afaf2244424d0b8022a7f5",
+        "android_client_info": {
+          "package_name": "com.billsbayarea.app.staging"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "593867148848-n93irrju31800s4qskjpvakdaiapedq0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.billsbayarea.app.staging",
+            "certificate_hash": "b14863e55aee2075788710c0abfc616fdf8bd9de"
+          }
+        },
+        {
+          "client_id": "593867148848-hgfqofn0goh79b8bj20l9q75pti5gp9c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0M2nU7MMrhDKMhdN3g_2SBGOXCsDPN4M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "593867148848-hgfqofn0goh79b8bj20l9q75pti5gp9c.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "593867148848-30q82vr5tn1vq958nkjdopakhsch3i7u.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.billsbayarea.app.staging"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

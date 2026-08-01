@@ -35,16 +35,16 @@ android {
         create("dev") {
             dimension = "environment"
             applicationIdSuffix = ".dev"
-            resValue("string", "app_name", "Bill's Fun Things To Do In The Bay Area! (Dev)")
+            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area! (Dev)")
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
-            resValue("string", "app_name", "Bill's Fun Things To Do In The Bay Area! (Staging)")
+            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area! (Staging)")
         }
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "Bill's Fun Things To Do In The Bay Area!")
+            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area!")
         }
     }
 
