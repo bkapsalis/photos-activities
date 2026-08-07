@@ -94,6 +94,7 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
       }
 
       final newImages = <_SelectedImage>[];
+      int skippedCount = 0;
       for (final xFile in images) {
         if (_selectedImages.length + newImages.length >= _maxImages) break;
 
@@ -101,22 +102,34 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
         try {
           bytes = await xFile.readAsBytes();
         } catch (_) {
-          final file = File(xFile.path);
-          if (await file.exists()) {
-            bytes = await file.readAsBytes();
+          try {
+            final file = File(xFile.path);
+            if (await file.exists()) {
+              bytes = await file.readAsBytes();
+            }
+          } catch (_) {
+            // File is inaccessible (e.g. Google Drive virtual file on web)
           }
         }
 
         if (bytes != null && bytes.isNotEmpty) {
           newImages.add(_SelectedImage(name: xFile.name, bytes: bytes));
+        } else {
+          skippedCount++;
         }
       }
 
       setState(() {
         _selectedImages.addAll(newImages);
         _isPicking = false;
-        if (_selectedImages.isEmpty) {
-          _errorMessage = 'Could not read image files. Please select JPEG or PNG images.';
+        if (newImages.isEmpty && skippedCount > 0) {
+          _errorMessage =
+              'Could not read $skippedCount image(s). '
+              'On web, try downloading files from Google Drive first, '
+              'then select them from your local Downloads folder.';
+        } else if (skippedCount > 0) {
+          _errorMessage =
+              '${newImages.length} image(s) loaded, $skippedCount could not be read.';
         }
       });
     } catch (e) {
@@ -243,7 +256,7 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
           child: Form(
             key: _formKey,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Header
