@@ -19,16 +19,15 @@ class PhotoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Stack(
           children: [
-            // Photo
-            AspectRatio(
-              aspectRatio: photo.aspectRatio.clamp(0.65, 1.5),
-              child: Image.network(
-                photo.imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: AppColors.surfaceVariant,
-                  child: const Icon(Icons.landscape, size: 48, color: AppColors.textSecondary),
-                ),
+            // Photo – no forced aspect ratio; let masonry handle sizing
+            Image.network(
+              photo.imageUrl,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                height: 180,
+                color: AppColors.surfaceVariant,
+                child: const Icon(Icons.landscape, size: 48, color: AppColors.textSecondary),
               ),
             ),
 

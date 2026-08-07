@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
@@ -233,46 +234,19 @@ class _MasonryFeed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Split photos into two columns for masonry effect
-    final leftPhotos = <PhotoPost>[];
-    final rightPhotos = <PhotoPost>[];
-    for (int i = 0; i < photos.length; i++) {
-      if (i.isEven) {
-        leftPhotos.add(photos[i]);
-      } else {
-        rightPhotos.add(photos[i]);
-      }
-    }
-
-    return SingleChildScrollView(
+    return MasonryGridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              children: leftPhotos
-                  .map((p) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: PhotoCard(photo: p, onTap: () => onPhotoTap?.call(p.id)),
-                      ))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              children: [
-                const SizedBox(height: 32), // Offset for masonry stagger
-                ...rightPhotos.map((p) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: PhotoCard(photo: p, onTap: () => onPhotoTap?.call(p.id)),
-                    )),
-              ],
-            ),
-          ),
-        ],
-      ),
+      itemCount: photos.length,
+      itemBuilder: (context, index) {
+        final photo = photos[index];
+        return PhotoCard(
+          photo: photo,
+          onTap: () => onPhotoTap?.call(photo.id),
+        );
+      },
     );
   }
 }

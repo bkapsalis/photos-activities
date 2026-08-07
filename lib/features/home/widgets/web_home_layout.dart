@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
@@ -448,13 +449,13 @@ class _WebPhotoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header (non-scrolling)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          child: Row(
             children: [
               Icon(_categoryIcon, color: AppColors.primary, size: 28),
               const SizedBox(width: 10),
@@ -489,50 +490,59 @@ class _WebPhotoGrid extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+        ),
+        const SizedBox(height: 24),
 
-          if (photos.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              child: Center(
-                child: Column(
-                  children: [
-                    const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
-                    const SizedBox(height: 12),
-                    Text('No photos yet in $category!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: () => UploadPhotoDialog.show(context, initialCategory: category),
-                      icon: const Icon(Icons.add_a_photo),
-                      label: const Text('Add First Photo'),
-                    ),
-                  ],
-                ),
+        // Content area
+        if (photos.isEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                  Text('No photos yet in $category!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => UploadPhotoDialog.show(context, initialCategory: category),
+                    icon: const Icon(Icons.add_a_photo),
+                    label: const Text('Add First Photo'),
+                  ),
+                ],
               ),
-            )
-          else
-            // Photo grid
-            LayoutBuilder(
+            ),
+          )
+        else
+          // Masonry photo grid – respects natural image dimensions
+          Expanded(
+            child: LayoutBuilder(
               builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 600 ? 3 : 2);
-                return Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: photos.map((photo) {
-                    final cardWidth = (constraints.maxWidth - (crossAxisCount - 1) * 16) / crossAxisCount;
-                    return SizedBox(
-                      width: cardWidth,
-                      child: PhotoCard(
-                        photo: photo,
-                        onTap: () => onPhotoTap?.call(photo.id),
-                      ),
+                final crossAxisCount = constraints.maxWidth > 1200
+                    ? 5
+                    : constraints.maxWidth > 900
+                        ? 4
+                        : constraints.maxWidth > 600
+                            ? 3
+                            : 2;
+                return MasonryGridView.count(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  itemCount: photos.length,
+                  itemBuilder: (context, index) {
+                    final photo = photos[index];
+                    return PhotoCard(
+                      photo: photo,
+                      onTap: () => onPhotoTap?.call(photo.id),
                     );
-                  }).toList(),
+                  },
                 );
               },
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
