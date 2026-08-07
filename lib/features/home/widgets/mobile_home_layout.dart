@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/firestore_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import 'photo_card.dart';
+import 'batch_upload_dialog.dart';
+import 'upload_photo_dialog.dart';
 
 class MobileHomeLayout extends StatelessWidget {
   final int selectedCategoryIndex;
@@ -21,6 +24,9 @@ class MobileHomeLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentCategory = categories[selectedCategoryIndex];
+    final firestoreService = FirestoreService();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -33,26 +39,28 @@ class MobileHomeLayout extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Discover Bay Area',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w400,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Discover Bay Area',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
-                      ),
-                      const Text(
-                        "Bill's Fun Things To Do In The Bay Area! 🏔",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                        const Text(
+                          "Bill's Fun Things",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   Row(
                     children: [
@@ -129,18 +137,79 @@ class MobileHomeLayout extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Masonry photo feed
+            // Masonry photo feed (Firestore Stream)
             Expanded(
-              child: _MasonryFeed(
-                photos: MockPhotos.hikingPhotos,
-                onPhotoTap: onPhotoTap,
+              child: StreamBuilder<List<PhotoPost>>(
+                stream: firestoreService.streamPhotosByCategory(currentCategory),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final photos = snapshot.data ?? [];
+                  if (photos.isEmpty) {
+                    firestoreService.seedSampleDataIfEmpty();
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
+                          const SizedBox(height: 12),
+                          Text('No photos yet in $currentCategory!',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: () => UploadPhotoDialog.show(context, initialCategory: currentCategory),
+                            icon: const Icon(Icons.add_a_photo),
+                            label: const Text('Add First Photo'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return _MasonryFeed(
+                    photos: photos,
+                    onPhotoTap: onPhotoTap,
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Wrap(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.add_a_photo),
+                    title: const Text('Upload Single Photo'),
+                    subtitle: const Text('Pick one photo from gallery or camera'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      UploadPhotoDialog.show(context, initialCategory: currentCategory);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_library),
+                    title: const Text('Batch Upload Photos'),
+                    subtitle: const Text('Select up to 50 photos at once'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      BatchUploadDialog.show(context, initialCategory: currentCategory);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add, size: 28),
       ),
       bottomNavigationBar: NavigationBar(

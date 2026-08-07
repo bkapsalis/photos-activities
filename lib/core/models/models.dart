@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
 
 class UserProfile {
@@ -17,6 +18,43 @@ class UserProfile {
     this.role,
     this.isMe = false,
   });
+
+  factory UserProfile.fromFirebaseUser(auth.User user) {
+    final name = (user.displayName != null && user.displayName!.isNotEmpty)
+        ? user.displayName!
+        : (user.email != null && user.email!.isNotEmpty)
+            ? user.email!.split('@').first
+            : 'Bay Explorer';
+
+    final parts = name.trim().split(RegExp(r'\s+'));
+    String initials = 'BE';
+    if (parts.isNotEmpty && parts.first.isNotEmpty) {
+      if (parts.length >= 2 && parts.last.isNotEmpty) {
+        initials = '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+      } else {
+        initials = parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+      }
+    }
+
+    final colors = [
+      const Color(0xFF4CAF50),
+      const Color(0xFF1E88E5),
+      const Color(0xFFE53935),
+      const Color(0xFFFF9800),
+      const Color(0xFF8E24AA),
+      const Color(0xFF00ACC1),
+    ];
+    final colorIndex = user.uid.hashCode.abs() % colors.length;
+
+    return UserProfile(
+      id: user.uid,
+      name: name,
+      initials: initials,
+      avatarColor: colors[colorIndex],
+      role: 'Contributor',
+      isMe: true,
+    );
+  }
 }
 
 class Location {

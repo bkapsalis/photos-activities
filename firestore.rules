@@ -3,17 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Photos ─────────────────────────────────────────
-    // Anyone can browse photos. Only authenticated users can create.
-    // Only the photo owner can update or delete.
+    // Anyone can browse photos. Authenticated users can create, update, or delete.
     match /photos/{photoId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null
-                    && (request.auth.uid == resource.data.userId
-                        || request.resource.data.diff(resource.data).affectedKeys()
-                           .hasOnly(['heartCount']));
-      allow delete: if request.auth != null
-                    && request.auth.uid == resource.data.userId;
+      allow create, update, delete: if request.auth != null;
     }
 
     // ── Locations ──────────────────────────────────────
@@ -25,17 +18,13 @@ service cloud.firestore {
     // ── Chat Messages (Location Chat) ──────────────────
     match /chats/{locationId}/messages/{messageId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-                             && request.auth.uid == resource.data.userId;
+      allow create, update, delete: if request.auth != null;
     }
 
     // ── Comments (Picture Chat) ────────────────────────
     match /comments/{photoId}/messages/{commentId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-                             && request.auth.uid == resource.data.userId;
+      allow create, update, delete: if request.auth != null;
     }
   }
 }

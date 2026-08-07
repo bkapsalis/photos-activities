@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../data/mock_data.dart';
 import '../models/models.dart';
 
 class FirestoreService {
@@ -10,23 +11,59 @@ class FirestoreService {
 
   /// Stream all photos for a category, ordered by newest first
   Stream<List<PhotoPost>> streamPhotosByCategory(String category) {
+    final cat = category.trim().toLowerCase();
     return _photosRef
-        .where('category', isEqualTo: category.toLowerCase())
-        .orderBy('createdAt', descending: true)
+        .where('category', isEqualTo: cat)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => PhotoPost.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => PhotoPost.fromFirestore(doc))
+          .toList();
+      list.sort((a, b) => (b.createdAt ?? DateTime.now())
+          .compareTo(a.createdAt ?? DateTime.now()));
+      return list;
+    });
   }
 
   /// Stream all photos (no filter)
   Stream<List<PhotoPost>> streamAllPhotos() {
     return _photosRef
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => PhotoPost.fromFirestore(doc))
-            .toList());
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => PhotoPost.fromFirestore(doc))
+          .toList();
+      list.sort((a, b) => (b.createdAt ?? DateTime.now())
+          .compareTo(a.createdAt ?? DateTime.now()));
+      return list;
+    });
+  }
+
+  /// Seed initial sample data into Firestore if empty
+  Future<void> seedSampleDataIfEmpty() async {
+    try {
+      final snapshot = await _photosRef.limit(1).get();
+      if (snapshot.docs.isEmpty) {
+        print('Seeding sample photos to Firestore...');
+        for (final photo in MockPhotos.hikingPhotos) {
+          final docRef = await _photosRef.add(photo.toFirestore());
+          // Seed sample comments for this photo
+          final commentsRef = _commentsRef(docRef.id);
+          for (final comment in MockComments.photoComments) {
+            await commentsRef.add(comment.toFirestore());
+          }
+        }
+
+        // Seed sample chat messages for 'hiking' location chat
+        final chatRef = _chatMessagesRef('hiking');
+        for (final msg in MockChat.locationChat) {
+          await chatRef.add(msg.toFirestore());
+        }
+        print('Sample data seeded successfully.');
+      }
+    } catch (e) {
+      print('Error seeding sample data: $e');
+    }
   }
 
   /// Get a single photo by ID
@@ -56,6 +93,21 @@ class FirestoreService {
   Future<void> incrementHeartCount(String photoId) async {
     await _photosRef.doc(photoId).update({
       'heartCount': FieldValue.increment(1),
+    });
+  }
+
+  /// Update photo details (location name, region, category)
+  Future<void> updatePhotoDetails(
+    String photoId, {
+    required String locationName,
+    String? region,
+    required String category,
+  }) async {
+    final cat = category.trim().toLowerCase();
+    await _photosRef.doc(photoId).update({
+      'locationName': locationName,
+      'locationRegion': region,
+      'category': cat,
     });
   }
 
@@ -130,6 +182,21 @@ class FirestoreService {
     // Also increment comment count on the photo
     await _photosRef.doc(photoId).update({
       'commentCount': FieldValue.increment(1),
+    });
+  }
+
+  /// Update comment text
+  Future<void> updateComment(String photoId, String commentId, String newText) async {
+    await _commentsRef(photoId).doc(commentId).update({
+      'text': newText,
+    });
+  }
+
+  /// Delete a comment
+  Future<void> deleteComment(String photoId, String commentId) async {
+    await _commentsRef(photoId).doc(commentId).delete();
+    await _photosRef.doc(photoId).update({
+      'commentCount': FieldValue.increment(-1),
     });
   }
 }

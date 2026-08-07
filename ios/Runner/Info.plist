@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow access to photo library to upload Bay Area photos.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow access to camera to take photos of Bay Area spots.</string>
 </dict>
 </plist>

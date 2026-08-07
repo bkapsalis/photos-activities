@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/firestore_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import 'photo_card.dart';
+import 'batch_upload_dialog.dart';
+import 'upload_photo_dialog.dart';
 
 class WebHomeLayout extends StatelessWidget {
   final int selectedCategoryIndex;
@@ -22,6 +25,9 @@ class WebHomeLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentCategory = categories[selectedCategoryIndex];
+    final firestoreService = FirestoreService();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -40,14 +46,30 @@ class WebHomeLayout extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Left sidebar
-                _WebSidebar(selectedCategory: categories[selectedCategoryIndex]),
+                _WebSidebar(selectedCategory: currentCategory),
                 const VerticalDivider(width: 1),
 
-                // Main photo grid
+                // Main photo grid (Firestore Stream)
                 Expanded(
-                  child: _WebPhotoGrid(
-                    photos: MockPhotos.hikingPhotos,
-                    onPhotoTap: onPhotoTap,
+                  child: StreamBuilder<List<PhotoPost>>(
+                    stream: firestoreService.streamPhotosByCategory(currentCategory),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final photos = snapshot.data ?? [];
+                      if (photos.isEmpty) {
+                        firestoreService.seedSampleDataIfEmpty();
+                      }
+
+                      return _WebPhotoGrid(
+                        category: currentCategory,
+                        photos: photos,
+                        onPhotoTap: onPhotoTap,
+                        onChatTap: onChatTap,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -176,7 +198,19 @@ class _WebTopNav extends StatelessWidget {
           _ActionButton(
             icon: Icons.add,
             label: 'Upload',
-            onTap: () {},
+            onTap: () => UploadPhotoDialog.show(
+              context,
+              initialCategory: categories[selectedCategoryIndex],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _ActionButton(
+            icon: Icons.photo_library,
+            label: 'Batch Upload',
+            onTap: () => BatchUploadDialog.show(
+              context,
+              initialCategory: categories[selectedCategoryIndex],
+            ),
           ),
           const SizedBox(width: 12),
           const UserAvatar(initials: 'BK', color: AppColors.primary, size: 34),
@@ -389,10 +423,28 @@ class _SidebarLink extends StatelessWidget {
 }
 
 class _WebPhotoGrid extends StatelessWidget {
+  final String category;
   final List<PhotoPost> photos;
   final Function(String photoId)? onPhotoTap;
+  final Function(String locationId)? onChatTap;
 
-  const _WebPhotoGrid({required this.photos, this.onPhotoTap});
+  const _WebPhotoGrid({
+    required this.category,
+    required this.photos,
+    this.onPhotoTap,
+    this.onChatTap,
+  });
+
+  IconData get _categoryIcon {
+    switch (category.toLowerCase()) {
+      case 'museums':
+        return Icons.museum;
+      case 'historic sites':
+        return Icons.account_balance;
+      default:
+        return Icons.hiking;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -404,49 +456,81 @@ class _WebPhotoGrid extends StatelessWidget {
           // Header
           Row(
             children: [
-              const Icon(Icons.hiking, color: AppColors.primary, size: 28),
+              Icon(_categoryIcon, color: AppColors.primary, size: 28),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Hiking', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    Text(
+                    Text(category, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const Text(
                       'Discover amazing spots shared by local guides · All Locations',
                       style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
               ),
-              _ActionButton(icon: Icons.filter_list, label: 'Filter', onTap: () {}),
+              _ActionButton(
+                icon: Icons.chat_outlined,
+                label: 'Open Chat',
+                onTap: () => onChatTap?.call(category.toLowerCase()),
+              ),
               const SizedBox(width: 8),
-              _ActionButton(icon: Icons.chat_outlined, label: 'Open Chat', onTap: () {}),
+              _ActionButton(
+                icon: Icons.add,
+                label: 'Upload',
+                onTap: () => UploadPhotoDialog.show(context, initialCategory: category),
+              ),
               const SizedBox(width: 8),
-              _ActionButton(icon: Icons.add, label: 'Upload', onTap: () {}),
+              _ActionButton(
+                icon: Icons.photo_library,
+                label: 'Batch Upload',
+                onTap: () => BatchUploadDialog.show(context, initialCategory: category),
+              ),
             ],
           ),
           const SizedBox(height: 24),
 
-          // Photo grid
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 600 ? 3 : 2);
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: photos.map((photo) {
-                  final cardWidth = (constraints.maxWidth - (crossAxisCount - 1) * 16) / crossAxisCount;
-                  return SizedBox(
-                    width: cardWidth,
-                    child: PhotoCard(
-                      photo: photo,
-                      onTap: () => onPhotoTap?.call(photo.id),
+          if (photos.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Column(
+                  children: [
+                    const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
+                    const SizedBox(height: 12),
+                    Text('No photos yet in $category!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => UploadPhotoDialog.show(context, initialCategory: category),
+                      icon: const Icon(Icons.add_a_photo),
+                      label: const Text('Add First Photo'),
                     ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
+                  ],
+                ),
+              ),
+            )
+          else
+            // Photo grid
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 600 ? 3 : 2);
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: photos.map((photo) {
+                    final cardWidth = (constraints.maxWidth - (crossAxisCount - 1) * 16) / crossAxisCount;
+                    return SizedBox(
+                      width: cardWidth,
+                      child: PhotoCard(
+                        photo: photo,
+                        onTap: () => onPhotoTap?.call(photo.id),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
         ],
       ),
     );

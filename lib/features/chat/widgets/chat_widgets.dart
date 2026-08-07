@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,7 +11,9 @@ class ChatMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMe = message.isMe;
+    final currentUser = auth.FirebaseAuth.instance.currentUser;
+    final isMe = message.isMe || (currentUser != null && message.user.id == currentUser.uid);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -92,10 +95,36 @@ class ChatMessageBubble extends StatelessWidget {
   }
 }
 
-class ChatInputBar extends StatelessWidget {
+class ChatInputBar extends StatefulWidget {
   final String hintText;
+  final ValueChanged<String>? onSend;
 
-  const ChatInputBar({super.key, this.hintText = 'Message the group...'});
+  const ChatInputBar({
+    super.key,
+    this.hintText = 'Message the group...',
+    this.onSend,
+  });
+
+  @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  final TextEditingController _controller = TextEditingController();
+
+  void _handleSend() {
+    final text = _controller.text.trim();
+    if (text.isNotEmpty) {
+      widget.onSend?.call(text);
+      _controller.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,37 +138,40 @@ class ChatInputBar extends StatelessWidget {
         top: false,
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.photo_outlined, color: AppColors.textSecondary),
-              onPressed: () {},
-              iconSize: 22,
-            ),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  hintText,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                child: TextField(
+                  controller: _controller,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _handleSend(),
+                  decoration: InputDecoration(
+                    hintText: widget.hintText,
+                    hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.emoji_emotions_outlined, color: AppColors.textSecondary),
-              onPressed: () {},
-              iconSize: 22,
-            ),
-            Container(
-              width: 38, height: 38,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+            InkWell(
+              onTap: _handleSend,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send, color: Colors.white, size: 18),
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 18),
             ),
           ],
         ),

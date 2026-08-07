@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/data/mock_data.dart';
 import '../../core/models/models.dart';
+import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
+import '../home/widgets/edit_photo_dialog.dart';
 
 class PictureChatScreen extends StatelessWidget {
   final String photoId;
@@ -11,14 +14,22 @@ class PictureChatScreen extends StatelessWidget {
 
   const PictureChatScreen({super.key, required this.photoId, this.onClose});
 
-  PhotoPost get _photo =>
-      MockPhotos.hikingPhotos.firstWhere((p) => p.id == photoId, orElse: () => MockPhotos.hikingPhotos.first);
-
   @override
   Widget build(BuildContext context) {
-    return ResponsiveLayout(
-      mobileLayout: _MobilePictureChat(photo: _photo, onClose: onClose),
-      webLayout: _WebPictureModal(photo: _photo, onClose: onClose),
+    return FutureBuilder<PhotoPost?>(
+      future: FirestoreService().getPhoto(photoId),
+      builder: (context, snapshot) {
+        final photo = snapshot.data ??
+            MockPhotos.hikingPhotos.firstWhere(
+              (p) => p.id == photoId,
+              orElse: () => MockPhotos.hikingPhotos.first,
+            );
+
+        return ResponsiveLayout(
+          mobileLayout: _MobilePictureChat(photo: photo, onClose: onClose),
+          webLayout: _WebPictureModal(photo: photo, onClose: onClose),
+        );
+      },
     );
   }
 }
@@ -31,8 +42,25 @@ class _MobilePictureChat extends StatelessWidget {
 
   const _MobilePictureChat({required this.photo, this.onClose});
 
+  void _addComment(String text) async {
+    final currentUser = auth.FirebaseAuth.instance.currentUser;
+    final userProfile = currentUser != null
+        ? UserProfile.fromFirebaseUser(currentUser)
+        : MockUsers.me;
+    final comment = Comment(
+      id: '',
+      user: userProfile,
+      text: text,
+      timestamp: 'Just now',
+      heartCount: 0,
+    );
+    await FirestoreService().addComment(photo.id, comment);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final firestoreService = FirestoreService();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -78,7 +106,7 @@ class _MobilePictureChat extends StatelessWidget {
               ),
             ),
 
-            // User info row
+            // User info row & Photo Actions
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
@@ -98,22 +126,70 @@ class _MobilePictureChat extends StatelessWidget {
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          photo.user.role ?? '',
+                          photo.user.role ?? 'Contributor',
                           style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
                   ),
-                  HeartCount(count: photo.heartCount),
+                  GestureDetector(
+                    onTap: () {
+                      if (photo.id.isNotEmpty) {
+                        firestoreService.incrementHeartCount(photo.id);
+                      }
+                    },
+                    child: HeartCount(count: photo.heartCount),
+                  ),
                   const SizedBox(width: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.chat_bubble_outline, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: 3),
-                      Text(
-                        photo.commentCount.toString(),
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    onSelected: (val) async {
+                      if (val == 'edit') {
+                        EditPhotoDialog.show(context, photo);
+                      } else if (val == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Delete Photo?'),
+                            content: const Text('Are you sure you want to delete this photo post?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await firestoreService.deletePhoto(photo.id);
+                          if (context.mounted) {
+                            (onClose ?? () => Navigator.pop(context))();
+                          }
+                        }
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit Photo'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 18, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete Photo', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -152,11 +228,11 @@ class _MobilePictureChat extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.hiking, size: 14, color: AppColors.primary),
+                              const Icon(Icons.landscape, size: 14, color: AppColors.primary),
                               const SizedBox(width: 4),
                               Text(
-                                photo.location.category,
-                                style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500),
+                                photo.location.category.isNotEmpty ? photo.location.category : 'Spot',
+                                style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),
@@ -164,28 +240,40 @@ class _MobilePictureChat extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      '${MockComments.photoComments.length} comments · ${photo.location.name}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
 
-                  // Comments list
+                  // Comments stream
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: MockComments.photoComments.length,
-                      itemBuilder: (context, index) {
-                        return _CommentTile(comment: MockComments.photoComments[index]);
+                    child: StreamBuilder<List<Comment>>(
+                      stream: firestoreService.streamComments(photo.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        final comments = snapshot.data ?? [];
+                        if (comments.isEmpty) {
+                          return const Center(
+                            child: Text('No comments yet. Leave a comment! 💬',
+                                style: TextStyle(color: AppColors.textSecondary)),
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: comments.length,
+                          itemBuilder: (context, index) {
+                            return _CommentTile(photoId: photo.id, comment: comments[index]);
+                          },
+                        );
                       },
                     ),
                   ),
 
                   // Input
-                  const ChatInputBar(hintText: 'Add a comment...'),
+                  ChatInputBar(
+                    hintText: 'Add a comment...',
+                    onSend: _addComment,
+                  ),
                 ],
               ),
             ),
@@ -204,8 +292,25 @@ class _WebPictureModal extends StatelessWidget {
 
   const _WebPictureModal({required this.photo, this.onClose});
 
+  void _addComment(String text) async {
+    final currentUser = auth.FirebaseAuth.instance.currentUser;
+    final userProfile = currentUser != null
+        ? UserProfile.fromFirebaseUser(currentUser)
+        : MockUsers.me;
+    final comment = Comment(
+      id: '',
+      user: userProfile,
+      text: text,
+      timestamp: 'Just now',
+      heartCount: 0,
+    );
+    await FirestoreService().addComment(photo.id, comment);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final firestoreService = FirestoreService();
+
     return Scaffold(
       backgroundColor: Colors.black26,
       body: Center(
@@ -278,25 +383,67 @@ class _WebPictureModal extends StatelessWidget {
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Text(
-                              'Follow',
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                            ),
+                          GestureDetector(
+                            onTap: () {
+                              if (photo.id.isNotEmpty) {
+                                firestoreService.incrementHeartCount(photo.id);
+                              }
+                            },
+                            child: HeartCount(count: photo.heartCount),
                           ),
                           const SizedBox(width: 12),
-                          HeartCount(count: photo.heartCount),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.bookmark_outline, size: 20, color: AppColors.textSecondary),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.share_outlined, size: 20, color: AppColors.textSecondary),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chat_bubble_outline, size: 18, color: AppColors.textSecondary),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                            onSelected: (val) async {
+                              if (val == 'edit') {
+                                EditPhotoDialog.show(context, photo);
+                              } else if (val == 'delete') {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Delete Photo?'),
+                                    content: const Text('Are you sure you want to delete this photo post?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await firestoreService.deletePhoto(photo.id);
+                                  if (context.mounted) {
+                                    (onClose ?? () => Navigator.pop(context))();
+                                  }
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit Photo'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete, size: 18, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Delete Photo', style: TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -321,19 +468,39 @@ class _WebPictureModal extends StatelessWidget {
                       ),
                     ),
 
-                    // Comments
+                    // Comments stream
                     Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: MockComments.photoComments.length,
-                        itemBuilder: (context, index) {
-                          return _CommentTile(comment: MockComments.photoComments[index]);
+                      child: StreamBuilder<List<Comment>>(
+                        stream: firestoreService.streamComments(photo.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+
+                          final comments = snapshot.data ?? [];
+                          if (comments.isEmpty) {
+                            return const Center(
+                              child: Text('No comments yet. Leave a comment! 💬',
+                                  style: TextStyle(color: AppColors.textSecondary)),
+                            );
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: comments.length,
+                            itemBuilder: (context, index) {
+                              return _CommentTile(photoId: photo.id, comment: comments[index]);
+                            },
+                          );
                         },
                       ),
                     ),
 
                     // Input
-                    const ChatInputBar(hintText: 'Add a comment...'),
+                    ChatInputBar(
+                      hintText: 'Add a comment...',
+                      onSend: _addComment,
+                    ),
                   ],
                 ),
               ),
@@ -348,9 +515,48 @@ class _WebPictureModal extends StatelessWidget {
 // ── Shared Comment Tile ───────────────────────────────
 
 class _CommentTile extends StatelessWidget {
+  final String photoId;
   final Comment comment;
 
-  const _CommentTile({required this.comment});
+  const _CommentTile({required this.photoId, required this.comment});
+
+  void _showEditCommentDialog(BuildContext context) {
+    final controller = TextEditingController(text: comment.text);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Comment ✏️'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Update your comment...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty && comment.id.isNotEmpty) {
+                await FirestoreService().updateComment(photoId, comment.id, newText);
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -369,9 +575,49 @@ class _CommentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  comment.user.name,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      comment.user.name,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    if (comment.id.isNotEmpty)
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.textSecondary),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onSelected: (val) async {
+                          if (val == 'edit') {
+                            _showEditCommentDialog(context);
+                          } else if (val == 'delete') {
+                            await FirestoreService().deleteComment(photoId, comment.id);
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 16),
+                                SizedBox(width: 6),
+                                Text('Edit Comment'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 16, color: Colors.red),
+                                SizedBox(width: 6),
+                                Text('Delete Comment', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(

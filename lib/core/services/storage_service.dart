@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -32,17 +33,45 @@ class StorageService {
     }
   }
 
-  /// Upload from XFile (from image_picker)
+  /// Upload raw image bytes to Firebase Storage
+  Future<String?> uploadBytes({
+    required Uint8List bytes,
+    required String category,
+    required String photoId,
+  }) async {
+    try {
+      final sanitizedCategory = category.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+      final storagePath = 'photos/$sanitizedCategory/$photoId.jpg';
+      final ref = _storage.ref().child(storagePath);
+
+      final uploadTask = await ref.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      if (uploadTask.state == TaskState.success) {
+        return await ref.getDownloadURL();
+      }
+      return null;
+    } catch (e) {
+      print('Error uploading bytes: $e');
+      return null;
+    }
+  }
+
+  /// Upload from XFile (from image_picker, supports Mobile & Web)
   Future<String?> uploadXFile({
     required XFile xFile,
     required String category,
     required String photoId,
   }) async {
-    return uploadPhoto(
-      filePath: xFile.path,
-      category: category,
-      photoId: photoId,
-    );
+    try {
+      final bytes = await xFile.readAsBytes();
+      return uploadBytes(bytes: bytes, category: category, photoId: photoId);
+    } catch (e) {
+      print('Error uploading XFile: $e');
+      return null;
+    }
   }
 
   /// Delete a photo from Storage
@@ -86,5 +115,20 @@ class StorageService {
       maxHeight: maxHeight.toDouble(),
       imageQuality: quality,
     );
+  }
+
+  /// Pick multiple images from gallery (up to [limit])
+  Future<List<XFile>> pickMultiImage({
+    int limit = 50,
+  }) async {
+    final picker = ImagePicker();
+    final images = await picker.pickMultiImage(
+      limit: limit,
+    );
+    // Enforce limit client-side as a safety net
+    if (images.length > limit) {
+      return images.sublist(0, limit);
+    }
+    return images;
   }
 }

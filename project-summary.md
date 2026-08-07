@@ -1,109 +1,124 @@
-# Project Context & Session Summary: Bill's Fun Things To Do In The Bay Area!
-
-**Date:** August 2, 2026  
-**Repository:** `git@github.com:bkapsalis/photos-activities.git`  
-**Current Active Branch:** `dev`  
-**Working Directory:** `/Users/williamkapsalis/antigravity-flutter-firebase/Photo-Three-Env/bills_photos`
+# Bills Bay Area Photos App — Conversation Summary
+**Date**: August 2–7, 2026  
+**Conversation ID**: `7e88e09f-3b3c-4e95-9d16-266d53627051`  
+**Project**: `/Users/williamkapsalis/antigravity-flutter-firebase/Photo-Three-Env/bills_photos`
 
 ---
 
-## 1. Executive Summary & Status
+## Project Overview
 
-The application **"Bill's Fun Things To Do In The Bay Area!"** is a Flutter photo-sharing and community activity guide supporting 3 distinct environment flavors (**Dev**, **Staging**, **Prod**) across iOS, Android, and Web.
+A Flutter + Firebase photo-sharing app for Bay Area locations. Uses **3 Firebase environments** (dev/staging/prod) with flavors. The app displays photos in a masonry grid by category (Hiking, Museums, Historic Sites), supports community chat per location, picture comments, hearts, and photo uploads.
 
-In this session, we completed the **full Firebase integration** (Authentication, Firestore Database, and Cloud Storage) across all 3 environments, fixed Android build configuration issues, and successfully launched the **Dev** flavor on the Android Emulator showing the live **Auth Gate & Sign-In UI**.
+### Key Firebase Services
+- **Firestore** — photos, locations, chat messages, comments collections
+- **Firebase Storage** — photo image uploads
+- **Firebase Auth** — anonymous auth for dev
 
----
-
-## 2. Completed Architecture & Implementations
-
-### A. Environment & Flavor Structure
-- **Dev Project:** `photos-activities-dev` | Package/Bundle ID: `com.billsbayarea.app.dev`
-- **Staging Project:** `photos-activities-staging` | Package/Bundle ID: `com.billsbayarea.app.staging`
-- **Prod Project:** `photos-activities-prod` | Package/Bundle ID: `com.billsbayarea.app`
-- **Entry Points:** `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart`
-- **Flavor Config Files:** `lib/firebase_options_dev.dart`, `lib/firebase_options_staging.dart`, `lib/firebase_options_prod.dart`
-- **Android `google-services.json` setup:**
-  - `android/app/src/dev/google-services.json`
-  - `android/app/src/staging/google-services.json`
-  - `android/app/src/prod/google-services.json`
-
-### B. Firebase Authentication (`lib/core/services/auth_service.dart`)
-- Integrated **Google Sign-In** using `google_sign_in` v7 API (`GoogleSignIn.instance.authenticate()`).
-- Integrated **Email / Password** sign-in & account creation.
-- Registered debug SHA-1 fingerprint (`B1:48:63:E5:5A:EE:20:75:78:87:10:C0:AB:FC:61:6F:DF:8B:D9:DE`) on all 3 Firebase Android apps.
-- Created `SignInScreen` (`lib/features/auth/sign_in_screen.dart`).
-- Implemented reactive `_AuthGate` in `lib/app.dart` using `FirebaseAuth.instance.authStateChanges()` to automatically route unauthenticated users to Sign-In and authenticated users to the main Home UI.
-
-### C. Cloud Firestore Database (`lib/core/services/firestore_service.dart`)
-- Databases provisioned in `us-west1` (Oregon) for all 3 projects.
-- Deployed `firestore.rules`: Public read, authenticated create/update, owner-only delete, allow heart increment.
-- Updated domain models in `lib/core/models/models.dart` (`PhotoPost`, `Location`, `ChatMessage`, `Comment`, `UserProfile`) with `fromFirestore` and `toFirestore` serialization methods.
-- Built reactive Stream & CRUD methods for photos by category (`hiking`, `museums`, `historic-sites`), location chats, and photo comments.
-
-### D. Cloud Storage (`lib/core/services/storage_service.dart`)
-- Storage buckets initialized in `us-west1` across all 3 projects.
-- Deployed `storage.rules`: Public read, authenticated write, 10MB file limit, restricted to `image/*` MIME types.
-- Created `StorageService` for photo uploads (`uploadPhoto`, `uploadXFile`), image deletion, download URL retrieval, and `image_picker` gallery/camera integration with automatic compression.
-
-### E. Build & Fixes Applied
-- **Android String Escaping:** Escaped apostrophe in `resValue("string", "app_name", "Bill\\'s Fun Things...")` inside `android/app/build.gradle.kts` to prevent XML compiler errors.
-- **Emulator Storage:** Cleaned stale APKs and trimmed cache on `emulator-5554`.
-- **Git State:** All code changes committed and pushed to `dev` branch (`git@github.com:bkapsalis/photos-activities.git`).
+### Firebase Dev Project: `photos-activities-dev`
 
 ---
 
-## 3. Key File Locations
+## What Was Built in This Conversation
+
+### 1. Firestore Stream Connectivity (Completed)
+Connected all UI screens to live Firestore streams:
+- **Photo Feed**: `MobileHomeLayout` and `WebHomeLayout` use `StreamBuilder<List<PhotoPost>>` with `FirestoreService.streamPhotosByCategory(category)`
+- **Location Chat**: `LocationChatScreen` streams `FirestoreService.streamChatMessages(locationId)` with `sendChatMessage()`
+- **Picture Comments**: `PictureChatScreen` streams `FirestoreService.streamComments(photoId)` with `addComment()` and `incrementHeartCount()`
+- **Auto-Seeding**: `seedSampleDataIfEmpty()` populates Firestore when empty
+
+### 2. Photo Upload (Completed)
+- **Single Upload**: `UploadPhotoDialog` — pick from gallery, camera, or preset emulator-friendly photo
+- **Batch Upload**: `BatchUploadDialog` — select up to 50 photos from gallery with progress tracking
+- **Storage**: `StorageService.uploadBytes()` uploads `Uint8List` via `putData()` (avoids Android temp cache file issues)
+- **Category path sanitization**: e.g. "Historic Sites" → "historic-sites" in Storage paths
+
+### 3. Edit & Delete Features (Completed)
+- **Edit Photo**: `EditPhotoDialog` — modify spot name, region, category. Accessible via `⋮` menu on `PhotoCard` and `PictureChatScreen`
+- **Delete Photo**: Confirmation dialog → `FirestoreService.deletePhoto()`. Available on `PhotoCard` and `PictureChatScreen`
+- **Edit Comment**: Inline dialog via `⋯` menu on each `_CommentTile` → `FirestoreService.updateComment()`
+- **Delete Comment**: Via `⋯` menu → `FirestoreService.deleteComment()` (also decrements comment count)
+
+### 4. Bug Fixes (Completed)
+- **Google Photos upload crash**: Fixed `PathNotFoundException` when Android cache files were cleaned before upload. Solution: read bytes into memory at pick time, upload via `uploadBytes()` instead of re-reading XFile path
+- **Android permissions**: Added `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`, `CAMERA` to AndroidManifest.xml
+- **Batch upload thumbnails**: Removed image compression parameters from `pickMultiImage()` that caused blank thumbnails on Android
+- **Batch upload button visibility**: Redesigned dialog with responsive `insetPadding`, `maxHeight: 85% screen`, pinned bottom action button
+
+---
+
+## Key Files Modified/Created
+
+### Core Services
+| File | Purpose |
+|------|---------|
+| `lib/core/services/firestore_service.dart` | Firestore CRUD, streams, seed data, `updatePhotoDetails()`, `updateComment()`, `deleteComment()` |
+| `lib/core/services/storage_service.dart` | `uploadBytes()`, `uploadXFile()`, `pickImage()`, `pickMultiImage(limit: 50)` |
+
+### Feature Widgets
+| File | Purpose |
+|------|---------|
+| `lib/features/home/widgets/upload_photo_dialog.dart` | Single photo upload dialog |
+| `lib/features/home/widgets/batch_upload_dialog.dart` | **[NEW]** Multi-photo batch upload (up to 50) with progress |
+| `lib/features/home/widgets/edit_photo_dialog.dart` | **[NEW]** Edit photo spot details |
+| `lib/features/home/widgets/photo_card.dart` | Photo card with `⋮` menu (Edit/Delete) |
+| `lib/features/home/widgets/mobile_home_layout.dart` | Mobile layout, FAB with single/batch upload options |
+| `lib/features/home/widgets/web_home_layout.dart` | Web layout with Upload + Batch Upload buttons |
+| `lib/features/picture_chat/picture_chat_screen.dart` | Photo detail + comments, edit/delete for photos & comments |
+
+### Config & Rules
+| File | Purpose |
+|------|---------|
+| `firestore.rules` | Deployed to dev — authenticated users can create/update/delete photos, comments, chat messages |
+| `android/app/src/main/AndroidManifest.xml` | Media/camera permissions |
+| `ios/Runner/Info.plist` | Photo library/camera usage descriptions |
+
+### Models
+| File | Purpose |
+|------|---------|
+| `lib/core/models/models.dart` | `UserProfile.fromFirebaseUser()` factory, `PhotoPost`, `Comment`, `Location`, `ChatMessage` |
+
+---
+
+## Running the App
+
+```bash
+# Dev flavor on Android emulator
+flutter run --flavor dev -t lib/main_dev.dart -d emulator-5554
+
+# Dev flavor on Chrome Web
+flutter run --flavor dev -t lib/main_dev.dart -d chrome
+```
+
+A background `flutter run` task is currently running as **task-192**. Send `R` via `manage_task send_input` for hot restart.
+
+---
+
+## Firestore Data Model
 
 ```
-bills_photos/
-  ├── android/app/src/
-  │     ├── dev/google-services.json
-  │     ├── staging/google-services.json
-  │     └── prod/google-services.json
-  ├── firestore.rules
-  ├── storage.rules
-  ├── firebase.json
-  ├── lib/
-  │     ├── app.dart                        # Contains _AuthGate
-  │     ├── main_dev.dart / main_staging.dart / main_prod.dart
-  │     ├── firebase_options_dev.dart / staging / prod
-  │     ├── core/
-  │     │     ├── models/models.dart        # Firestore serializable models
-  │     │     └── services/
-  │     │           ├── auth_service.dart   # Firebase Auth + Google Sign-In
-  │     │           ├── firestore_service.dart # Firestore CRUD & Streams
-  │     │           └── storage_service.dart   # Storage Uploads & ImagePicker
-  │     └── features/
-  │           └── auth/sign_in_screen.dart  # Sign-In UI
+photos/{photoId}
+  ├── imageUrl, locationName, locationRegion, category
+  ├── userId, userName, heartCount, commentCount
+  └── createdAt
+
+comments/{photoId}/messages/{commentId}
+  ├── text, userId, userName, timestamp
+  └── heartCount
+
+chats/{locationId}/messages/{messageId}
+  ├── text, userId, userName, timestamp
+  └── isMe (computed client-side)
+
+locations/{locationId}
+  ├── name, region, category, postCount
 ```
 
 ---
 
-## 4. Next Steps for Next Session
+## Current State
 
-1. **Connect UI Widgets to Firestore Streams:**
-   - Wire `MobileHomeLayout` and `WebHomeLayout` to consume `FirestoreService.streamPhotosByCategory()`.
-   - Wire `LocationChatScreen` to `FirestoreService.streamChatMessages()`.
-   - Wire `PictureChatScreen` to `FirestoreService.streamComments()`.
-2. **Photo Upload UI:**
-   - Add a Floating Action Button (FAB) or upload dialog on the Discovery screen allowing users to pick a photo from gallery/camera, choose a category (`Hiking`, `Museums`, `Historic Sites`), enter a location name, and upload to Firebase Storage + Firestore.
-3. **Verify Auth Flow Live:**
-   - Perform a sign-in with Google or Email on the emulator and verify user document creation / stream updates.
-
----
-
-## 5. Quick Commands for New Conversation
-
-- **Run Dev App on Emulator:**
-  ```bash
-  flutter run --flavor dev -t lib/main_dev.dart -d emulator-5554
-  ```
-- **Check Analysis:**
-  ```bash
-  flutter analyze --no-fatal-infos
-  ```
-- **Deploy Security Rules (if updated):**
-  ```bash
-  npx -y firebase-tools@latest deploy --only firestore:rules,storage --project=photos-activities-dev
-  ```
+- `flutter analyze --no-fatal-infos` passes with **0 errors** (11 info-level `avoid_print` warnings only)
+- Firestore rules deployed to `photos-activities-dev`
+- App running on `emulator-5554` via task-192
+- All features functional: photo feed streams, single upload, batch upload (50 max), edit/delete photos, edit/delete comments, location chat, picture chat, hearts
