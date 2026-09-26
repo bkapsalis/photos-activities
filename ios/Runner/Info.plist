@@ -2,6 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Schemes the app may hand off to for directions. iOS blocks
+	     launching an unlisted scheme, so maps:// must be declared. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+	</array>
+	<key>MapsApiKey</key>
+	<string>$(MAPS_API_KEY)</string>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -20,9 +31,51 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg</string>
+				<string>com.googleusercontent.apps.593867148848-30q82vr5tn1vq958nkjdopakhsch3i7u</string>
+				<string>com.googleusercontent.apps.978335208017-ktkgne3aj7uqmu147unpk0imghq7d8g9</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow access to camera to take photos of Bay Area spots.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow access to photo library to upload Bay Area photos.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
@@ -41,13 +94,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow access to photo library to upload Bay Area photos.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Allow access to camera to take photos of Bay Area spots.</string>
 </dict>
 </plist>

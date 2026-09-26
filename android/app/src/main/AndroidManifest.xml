@@ -3,6 +3,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- No ACCESS_MEDIA_LOCATION: measured, and it does nothing here. Android
+         only returns unredacted GPS to an app that also calls
+         MediaStore.setRequireOriginal(), which image_picker never does. Photo
+         location is obtained through the document picker instead - see
+         StorageService.pickSingleImage - so requesting this would be asking
+         for a sensitive permission the app cannot use. -->
 
     <application
         android:label="bills_bay_area"
@@ -30,6 +36,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Google Maps key. The value is injected from local.properties
+             (which git ignores) so the key is never committed. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -45,6 +56,16 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11+ hides other apps unless declared. Without this the
+             geo: lookup finds nothing and directions fall back to the web. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

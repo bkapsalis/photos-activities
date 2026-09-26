@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
-import '../../core/data/mock_data.dart';
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -9,30 +8,41 @@ import '../chat/widgets/chat_widgets.dart';
 
 class LocationChatScreen extends StatelessWidget {
   final String locationId;
+  final String? locationName;
   final VoidCallback? onClose;
 
-  const LocationChatScreen({super.key, required this.locationId, this.onClose});
+  const LocationChatScreen({
+    super.key,
+    required this.locationId,
+    this.locationName,
+    this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ResponsiveLayout(
-      mobileLayout: _MobileChatSheet(locationId: locationId, onClose: onClose),
-      webLayout: _WebChatPanel(locationId: locationId, onClose: onClose),
+      mobileLayout: _MobileChatSheet(locationId: locationId, locationName: locationName, onClose: onClose),
+      webLayout: _WebChatPanel(locationId: locationId, locationName: locationName, onClose: onClose),
     );
   }
 }
 
 class _MobileChatSheet extends StatelessWidget {
   final String locationId;
+  final String? locationName;
   final VoidCallback? onClose;
 
-  const _MobileChatSheet({required this.locationId, this.onClose});
+  const _MobileChatSheet({required this.locationId, this.locationName, this.onClose});
 
-  void _sendMessage(String text) async {
+  void _sendMessage(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
-    final userProfile = currentUser != null
-        ? UserProfile.fromFirebaseUser(currentUser)
-        : MockUsers.me;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to join the chat.')),
+      );
+      return;
+    }
+    final userProfile = UserProfile.fromFirebaseUser(currentUser);
     final msg = ChatMessage(
       id: '',
       user: userProfile,
@@ -46,6 +56,7 @@ class _MobileChatSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
+    final displayName = locationName ?? locationId;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -57,9 +68,9 @@ class _MobileChatSheet extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${locationId.toUpperCase()} Community Chat',
+            Text('$displayName Chat',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const Text('Live Bay Area Discussion',
+            const Text('Community Discussion',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
         ),
@@ -77,10 +88,19 @@ class _MobileChatSheet extends StatelessWidget {
 
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
-                  firestoreService.seedSampleDataIfEmpty();
-                  return const Center(
-                    child: Text('No messages yet. Be the first to chat! 💬',
-                        style: TextStyle(color: AppColors.textSecondary)),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.forum_outlined, size: 48, color: AppColors.textSecondary),
+                        const SizedBox(height: 12),
+                        Text('No messages yet in $displayName',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        const Text('Be the first to chat! 💬',
+                            style: TextStyle(color: AppColors.textSecondary)),
+                      ],
+                    ),
                   );
                 }
 
@@ -96,8 +116,8 @@ class _MobileChatSheet extends StatelessWidget {
           ),
           // Input Bar
           ChatInputBar(
-            hintText: 'Message $locationId community...',
-            onSend: _sendMessage,
+            hintText: 'Message $displayName community...',
+            onSend: (text) => _sendMessage(context, text),
           ),
         ],
       ),
@@ -107,15 +127,20 @@ class _MobileChatSheet extends StatelessWidget {
 
 class _WebChatPanel extends StatelessWidget {
   final String locationId;
+  final String? locationName;
   final VoidCallback? onClose;
 
-  const _WebChatPanel({required this.locationId, this.onClose});
+  const _WebChatPanel({required this.locationId, this.locationName, this.onClose});
 
-  void _sendMessage(String text) async {
+  void _sendMessage(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
-    final userProfile = currentUser != null
-        ? UserProfile.fromFirebaseUser(currentUser)
-        : MockUsers.me;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to join the chat.')),
+      );
+      return;
+    }
+    final userProfile = UserProfile.fromFirebaseUser(currentUser);
     final msg = ChatMessage(
       id: '',
       user: userProfile,
@@ -129,6 +154,7 @@ class _WebChatPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
+    final displayName = locationName ?? locationId;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -139,11 +165,18 @@ class _WebChatPanel extends StatelessWidget {
             flex: 2,
             child: Container(
               color: AppColors.surfaceVariant,
-              child: Image.network(
-                'https://picsum.photos/seed/eaton/1200/800',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.forum, size: 64, color: AppColors.primary),
+                    const SizedBox(height: 16),
+                    Text(displayName,
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text('Community Chat',
+                        style: TextStyle(color: AppColors.textSecondary)),
+                  ],
                 ),
               ),
             ),
@@ -168,7 +201,7 @@ class _WebChatPanel extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${locationId.toUpperCase()} Chat',
+                          '$displayName Chat',
                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -191,7 +224,6 @@ class _WebChatPanel extends StatelessWidget {
 
                       final messages = snapshot.data ?? [];
                       if (messages.isEmpty) {
-                        firestoreService.seedSampleDataIfEmpty();
                         return const Center(
                           child: Text('No messages yet. Be the first to chat! 💬',
                               style: TextStyle(color: AppColors.textSecondary)),
@@ -211,8 +243,8 @@ class _WebChatPanel extends StatelessWidget {
 
                 // Input Bar
                 ChatInputBar(
-                  hintText: 'Message $locationId community...',
-                  onSend: _sendMessage,
+                  hintText: 'Message $displayName community...',
+                  onSend: (text) => _sendMessage(context, text),
                 ),
               ],
             ),

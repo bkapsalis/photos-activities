@@ -1,5 +1,5 @@
 name: bills_bay_area
-description: "Bill's Fun Things To Do In The Bay Area! - Photo-sharing app for local guides"
+description: "Bill's Bay Area Fun Activities - Photo-sharing app for local guides"
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -26,8 +26,25 @@ dependencies:
   # Image picking
   image_picker: ^1.2.2
 
+  # EXIF parsing. Pure Dart (no plugin), so Android, iOS and web all run the
+  # same code path. Used to read metadata off the ORIGINAL bytes before any
+  # re-encode strips it.
+  exif_reader: ^4.2.0
+
+  # Decode/resize/re-encode. Pure Dart so Android, iOS and web share one path.
+  # encodeJpg writes no EXIF, which is what strips location from the uploaded
+  # file rather than a separate scrubbing step that could be forgotten.
+  image: ^4.10.1
+
+  # Google Maps — needs an API key per platform, see MAP_SETUP.md
+  google_maps_flutter: ^2.9.0
+
+  # Handing a destination to whichever map app the device prefers
+  url_launcher: ^6.3.1
+
   # Masonry grid layout
   flutter_staggered_grid_view: ^0.7.0
+  file_picker: ^11.0.3
 
 
 dev_dependencies:

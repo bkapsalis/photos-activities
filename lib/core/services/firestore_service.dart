@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../data/mock_data.dart';
 import '../models/models.dart';
 
 class FirestoreService {
@@ -9,15 +8,15 @@ class FirestoreService {
 
   CollectionReference get _photosRef => _db.collection('photos');
 
-  /// Stream all photos for a category, ordered by newest first
+  /// Stream all photos for a category (case-insensitive), ordered by newest first
   Stream<List<PhotoPost>> streamPhotosByCategory(String category) {
-    final cat = category.trim().toLowerCase();
+    final target = category.trim().toLowerCase();
     return _photosRef
-        .where('category', isEqualTo: cat)
         .snapshots()
         .map((snapshot) {
       final list = snapshot.docs
           .map((doc) => PhotoPost.fromFirestore(doc))
+          .where((photo) => photo.category.trim().toLowerCase() == target)
           .toList();
       list.sort((a, b) => (b.createdAt ?? DateTime.now())
           .compareTo(a.createdAt ?? DateTime.now()));
@@ -39,31 +38,43 @@ class FirestoreService {
     });
   }
 
-  /// Seed initial sample data into Firestore if empty
-  Future<void> seedSampleDataIfEmpty() async {
-    try {
-      final snapshot = await _photosRef.limit(1).get();
-      if (snapshot.docs.isEmpty) {
-        print('Seeding sample photos to Firestore...');
-        for (final photo in MockPhotos.hikingPhotos) {
-          final docRef = await _photosRef.add(photo.toFirestore());
-          // Seed sample comments for this photo
-          final commentsRef = _commentsRef(docRef.id);
-          for (final comment in MockComments.photoComments) {
-            await commentsRef.add(comment.toFirestore());
-          }
-        }
+  /// Stream photos filtered by category AND location name (case-insensitive)
+  Stream<List<PhotoPost>> streamPhotosByLocation(String category, String locationName) {
+    final targetCat = category.trim().toLowerCase();
+    final targetLoc = locationName.trim().toLowerCase();
+    return _photosRef
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => PhotoPost.fromFirestore(doc))
+          .where((photo) =>
+              photo.category.trim().toLowerCase() == targetCat &&
+              photo.location.name.trim().toLowerCase() == targetLoc)
+          .toList();
+      list.sort((a, b) => (b.createdAt ?? DateTime.now())
+          .compareTo(a.createdAt ?? DateTime.now()));
+      return list;
+    });
+  }
 
-        // Seed sample chat messages for 'hiking' location chat
-        final chatRef = _chatMessagesRef('hiking');
-        for (final msg in MockChat.locationChat) {
-          await chatRef.add(msg.toFirestore());
+  /// Stream distinct location names for a category (derived from photos)
+  Stream<List<String>> streamDistinctLocations(String category) {
+    final target = category.trim().toLowerCase();
+    return _photosRef
+        .snapshots()
+        .map((snapshot) {
+      final locations = <String>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>? ?? {};
+        final cat = (data['category'] as String? ?? '').trim().toLowerCase();
+        if (cat == target) {
+          final name = (data['locationName'] as String? ?? '').trim();
+          if (name.isNotEmpty) locations.add(name);
         }
-        print('Sample data seeded successfully.');
       }
-    } catch (e) {
-      print('Error seeding sample data: $e');
-    }
+      final sorted = locations.toList()..sort();
+      return sorted;
+    });
   }
 
   /// Get a single photo by ID
@@ -103,18 +114,17 @@ class FirestoreService {
     String? region,
     required String category,
   }) async {
-    final cat = category.trim().toLowerCase();
     await _photosRef.doc(photoId).update({
       'locationName': locationName,
       'locationRegion': region,
-      'category': cat,
+      'category': category.trim(),
     });
   }
 
-  /// Delete a photo
-  Future<void> deletePhoto(String photoId) async {
-    await _photosRef.doc(photoId).delete();
-  }
+  // Photo deletion deliberately lives in PhotoDeletionService, not here.
+  // A photo owns an image file in Storage and a subcollection of comments,
+  // and removing only this document leaves both stranded with nothing
+  // pointing at them — which is exactly what the old deletePhoto did.
 
   // ── Location Operations ────────────────────────────────
 

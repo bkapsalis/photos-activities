@@ -16,8 +16,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedCategoryIndex = 0;
 
+  /// Selected location tab within the current category. null means "All".
+  String? _selectedLocation;
+
   void _onCategoryChanged(int index) {
-    setState(() => _selectedCategoryIndex = index);
+    setState(() {
+      _selectedCategoryIndex = index;
+      // Location tabs belong to a category, so start the new one on "All".
+      _selectedLocation = null;
+    });
+  }
+
+  void _onLocationChanged(String? location) {
+    setState(() => _selectedLocation = location);
   }
 
   @override
@@ -26,12 +37,16 @@ class _HomeScreenState extends State<HomeScreen> {
       mobileLayout: MobileHomeLayout(
         selectedCategoryIndex: _selectedCategoryIndex,
         onCategoryChanged: _onCategoryChanged,
+        selectedLocation: _selectedLocation,
+        onLocationChanged: _onLocationChanged,
         onPhotoTap: widget.onPhotoTap,
         onChatTap: widget.onChatTap,
       ),
       webLayout: WebHomeLayout(
         selectedCategoryIndex: _selectedCategoryIndex,
         onCategoryChanged: _onCategoryChanged,
+        selectedLocation: _selectedLocation,
+        onLocationChanged: _onLocationChanged,
         onPhotoTap: widget.onPhotoTap,
         onChatTap: widget.onChatTap,
       ),

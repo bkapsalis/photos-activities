@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
@@ -6,18 +5,41 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/image_processing_service.dart';
+import '../../../core/services/photo_metadata_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/shared_widgets.dart';
 
 class UploadPhotoDialog extends StatefulWidget {
   final String initialCategory;
+  final ImageSource imageSource;
 
-  const UploadPhotoDialog({super.key, this.initialCategory = 'Hiking'});
+  const UploadPhotoDialog({
+    super.key,
+    this.initialCategory = 'Hiking Areas',
+    this.imageSource = ImageSource.gallery,
+  });
 
-  static Future<void> show(BuildContext context, {String initialCategory = 'Hiking'}) {
+  /// Show dialog for camera capture
+  static Future<void> showCamera(BuildContext context, {String initialCategory = 'Hiking Areas'}) {
     return showDialog(
       context: context,
-      builder: (_) => UploadPhotoDialog(initialCategory: initialCategory),
+      builder: (_) => UploadPhotoDialog(
+        initialCategory: initialCategory,
+        imageSource: ImageSource.camera,
+      ),
+    );
+  }
+
+  /// Show dialog for single gallery pick
+  static Future<void> showGallery(BuildContext context, {String initialCategory = 'Hiking Areas'}) {
+    return showDialog(
+      context: context,
+      builder: (_) => UploadPhotoDialog(
+        initialCategory: initialCategory,
+        imageSource: ImageSource.gallery,
+      ),
     );
   }
 
@@ -32,12 +54,16 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
 
   late String _selectedCategory;
   Uint8List? _imageBytes;
-  String? _sampleImageUrl;
   bool _isUploading = false;
   String? _errorMessage;
 
   final StorageService _storageService = StorageService();
   final FirestoreService _firestoreService = FirestoreService();
+  static const _metadataService = PhotoMetadataService();
+  static const _imageProcessing = ImageProcessingService();
+
+  /// Read from the original bytes at pick time, before any re-encode.
+  PhotoMetadata _metadata = PhotoMetadata.empty;
 
   @override
   void initState() {
@@ -45,6 +71,8 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
     _selectedCategory = categories.contains(widget.initialCategory)
         ? widget.initialCategory
         : categories.first;
+    // Auto-open picker on launch
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pickImage());
   }
 
   @override
@@ -54,24 +82,24 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
     super.dispose();
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickImage() async {
     try {
-      final image = await _storageService.pickImage(source: source);
-      if (image != null) {
-        Uint8List? bytes;
-        try {
-          bytes = await image.readAsBytes();
-        } catch (_) {
-          final file = File(image.path);
-          if (await file.exists()) {
-            bytes = await file.readAsBytes();
-          }
-        }
+      // Routed per platform so the photo's location survives the pick; see
+      // StorageService.pickSingleImage for what each platform does to EXIF.
+      final picked = await _storageService.pickSingleImage(
+        source: widget.imageSource,
+      );
+      if (picked != null) {
+        final bytes = picked.bytes;
 
-        if (bytes != null && bytes.isNotEmpty) {
+        if (bytes.isNotEmpty) {
+          // Must happen here, on the untouched file. The upload re-encodes,
+          // and a re-encoded JPEG carries none of this.
+          final metadata = await _metadataService.extract(bytes);
+          if (!mounted) return;
           setState(() {
             _imageBytes = bytes;
-            _sampleImageUrl = null;
+            _metadata = metadata;
             _errorMessage = null;
           });
         } else {
@@ -79,24 +107,13 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
         }
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Failed to pick image: $e');
+      if (mounted) setState(() => _errorMessage = 'Failed to pick image: $e');
     }
   }
 
-  void _usePresetPhoto() {
-    final sampleSeeds = ['bayarea', 'marinhills', 'goldengate', 'redwoods', 'tilden'];
-    final seed = sampleSeeds[DateTime.now().second % sampleSeeds.length];
-    final url = 'https://picsum.photos/seed/$seed/800/600';
-    setState(() {
-      _imageBytes = null;
-      _sampleImageUrl = url;
-      _errorMessage = null;
-    });
-  }
-
   Future<void> _uploadAndPublish() async {
-    if (_imageBytes == null && _sampleImageUrl == null) {
-      setState(() => _errorMessage = 'Please select a photo to share');
+    if (_imageBytes == null) {
+      setState(() => _errorMessage = 'Please select a photo first');
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -108,24 +125,36 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
 
     try {
       final photoId = DateTime.now().millisecondsSinceEpoch.toString();
-      String? imageUrl = _sampleImageUrl;
 
-      if (_imageBytes != null) {
-        imageUrl = await _storageService.uploadBytes(
-          bytes: _imageBytes!,
-          category: _selectedCategory,
-          photoId: photoId,
-        );
-      }
+      // Measure the original, then upload a resized copy with no metadata on
+      // it. Only the Firestore document records where the photo was taken.
+      final aspectRatio = await _storageService.getImageAspectRatio(
+        _imageBytes!,
+      );
+      final upload = await _imageProcessing.prepareForUpload(_imageBytes!);
+
+      final imageUrl = await _storageService.uploadBytes(
+        bytes: upload,
+        category: _selectedCategory,
+        photoId: photoId,
+      );
 
       if (imageUrl == null) {
         throw Exception('Failed to upload image to Firebase Storage');
       }
 
       final currentUser = auth.FirebaseAuth.instance.currentUser;
-      final userProfile = currentUser != null
-          ? UserProfile.fromFirebaseUser(currentUser)
-          : MockUsers.me;
+      if (currentUser == null) {
+        // Never attribute an upload to a placeholder account: a photo whose
+        // owner is fake cannot be edited, deleted or counted by whoever
+        // actually took it.
+        throw Exception('You must be signed in to upload a photo.');
+      }
+      final userProfile = UserProfile.fromFirebaseUser(currentUser);
+
+      final decoded = await decodeImageFromList(_imageBytes!);
+      final metadata = _metadata.withFallbackSize(decoded.width, decoded.height);
+      decoded.dispose();
 
       final location = Location(
         id: 'loc_$photoId',
@@ -135,6 +164,10 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
             : 'Bay Area, CA',
         postCount: 1,
         category: _selectedCategory,
+        // Mirrored onto the flat fields the map and directions already read,
+        // so a photo with GPS is plotted the moment it is uploaded.
+        latitude: metadata.latitude,
+        longitude: metadata.longitude,
       );
 
       final photoPost = PhotoPost(
@@ -142,11 +175,12 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
         imageUrl: imageUrl,
         location: location,
         user: userProfile,
-        heartCount: 1,
+        heartCount: 0,
         commentCount: 0,
-        aspectRatio: 1.2,
-        category: _selectedCategory.toLowerCase(),
+        aspectRatio: aspectRatio,
+        category: _selectedCategory,
         createdAt: DateTime.now(),
+        metadata: metadata,
       );
 
       final docId = await _firestoreService.addPhoto(photoPost);
@@ -154,13 +188,13 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
       if (docId != null && mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photo published to Bay Area feed! 🎉'),
+          SnackBar(
+            content: Text('Photo uploaded to $_selectedCategory! 🎉'),
             backgroundColor: AppColors.primary,
           ),
         );
       } else {
-        throw Exception('Failed to save photo metadata to Firestore');
+        throw Exception('Failed to save photo metadata');
       }
     } catch (e) {
       if (mounted) {
@@ -174,6 +208,9 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isCamera = widget.imageSource == ImageSource.camera;
+    final title = isCamera ? 'Take a Photo 📷' : 'Upload from Device 🖼️';
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -186,13 +223,12 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Share a Bay Area Spot 📸',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    Text(title,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: _isUploading ? null : () => Navigator.pop(context),
@@ -201,47 +237,11 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Photo preview & selection
+                // Photo preview & re-pick
                 GestureDetector(
-                  onTap: _isUploading
-                      ? null
-                      : () {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (ctx) => SafeArea(
-                              child: Wrap(
-                                children: [
-                                  ListTile(
-                                    leading: const Icon(Icons.photo_library),
-                                    title: const Text('Choose from Gallery'),
-                                    onTap: () {
-                                      Navigator.pop(ctx);
-                                      _pickImage(ImageSource.gallery);
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(Icons.camera_alt),
-                                    title: const Text('Take a Photo'),
-                                    onTap: () {
-                                      Navigator.pop(ctx);
-                                      _pickImage(ImageSource.camera);
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(Icons.landscape),
-                                    title: const Text('Use Preset Bay Area Photo (Emulator friendly)'),
-                                    onTap: () {
-                                      Navigator.pop(ctx);
-                                      _usePresetPhoto();
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                  onTap: _isUploading ? null : _pickImage,
                   child: Container(
-                    height: 180,
+                    height: 200,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant,
@@ -253,20 +253,18 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                             borderRadius: BorderRadius.circular(12),
                             child: Image.memory(_imageBytes!, fit: BoxFit.cover),
                           )
-                        : _sampleImageUrl != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(_sampleImageUrl!, fit: BoxFit.cover),
-                              )
-                            : const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_a_photo, size: 40, color: AppColors.textSecondary),
-                                  SizedBox(height: 8),
-                                  Text('Tap to pick from gallery, camera, or preset',
-                                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                ],
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(isCamera ? Icons.camera_alt : Icons.photo_library,
+                                  size: 40, color: AppColors.textSecondary),
+                              const SizedBox(height: 8),
+                              Text(
+                                isCamera ? 'Tap to open camera' : 'Tap to choose a photo',
+                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               ),
+                            ],
+                          ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -287,16 +285,11 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Location name
-                TextFormField(
+                // Location name (subcategory within the selected category)
+                LocationNameField(
+                  category: _selectedCategory,
                   controller: _locationNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Spot Name',
-                    hintText: 'e.g. Marin Headlands, Palace of Fine Arts',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (val) =>
-                      (val == null || val.trim().isEmpty) ? 'Please enter spot name' : null,
+                  firestoreService: _firestoreService,
                 ),
                 const SizedBox(height: 16),
 
@@ -305,7 +298,7 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                   controller: _regionController,
                   decoration: const InputDecoration(
                     labelText: 'Region / City (Optional)',
-                    hintText: 'e.g. Marin County, CA',
+                    hintText: 'e.g. Los Gatos, CA',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -321,21 +314,24 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                 SizedBox(
                   width: double.infinity,
                   height: 48,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     onPressed: _isUploading ? null : _uploadAndPublish,
+                    icon: _isUploading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload),
+                    label: Text(
+                      _isUploading ? 'Uploading...' : 'Upload Photo',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: _isUploading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('Publish Photo',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

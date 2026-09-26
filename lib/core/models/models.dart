@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
 
+import 'photo_metadata.dart';
+export 'photo_metadata.dart';
+
 class UserProfile {
   final String id;
   final String name;
@@ -9,6 +12,7 @@ class UserProfile {
   final Color avatarColor;
   final String? role;
   final bool isMe;
+  final bool isGuest;
 
   const UserProfile({
     required this.id,
@@ -17,9 +21,29 @@ class UserProfile {
     required this.avatarColor,
     this.role,
     this.isMe = false,
+    this.isGuest = false,
   });
 
+  /// Every guest would otherwise be called "Guest", so a uid fragment keeps
+  /// them distinguishable in a shared chat.
+  static String guestName(String uid) {
+    final suffix = uid.length >= 4 ? uid.substring(0, 4) : uid;
+    return 'Guest $suffix';
+  }
+
   factory UserProfile.fromFirebaseUser(auth.User user) {
+    if (user.isAnonymous) {
+      return UserProfile(
+        id: user.uid,
+        name: guestName(user.uid),
+        initials: 'G',
+        avatarColor: _colorForUid(user.uid),
+        role: 'Guest',
+        isMe: true,
+        isGuest: true,
+      );
+    }
+
     final name = (user.displayName != null && user.displayName!.isNotEmpty)
         ? user.displayName!
         : (user.email != null && user.email!.isNotEmpty)
@@ -36,24 +60,26 @@ class UserProfile {
       }
     }
 
-    final colors = [
-      const Color(0xFF4CAF50),
-      const Color(0xFF1E88E5),
-      const Color(0xFFE53935),
-      const Color(0xFFFF9800),
-      const Color(0xFF8E24AA),
-      const Color(0xFF00ACC1),
-    ];
-    final colorIndex = user.uid.hashCode.abs() % colors.length;
-
     return UserProfile(
       id: user.uid,
       name: name,
       initials: initials,
-      avatarColor: colors[colorIndex],
+      avatarColor: _colorForUid(user.uid),
       role: 'Contributor',
       isMe: true,
     );
+  }
+
+  static Color _colorForUid(String uid) {
+    const colors = [
+      Color(0xFF4CAF50),
+      Color(0xFF1E88E5),
+      Color(0xFFE53935),
+      Color(0xFFFF9800),
+      Color(0xFF8E24AA),
+      Color(0xFF00ACC1),
+    ];
+    return colors[uid.hashCode.abs() % colors.length];
   }
 }
 
@@ -64,13 +90,25 @@ class Location {
   final int postCount;
   final String category;
 
+  /// Where this place actually is. Null for photos uploaded before
+  /// coordinates were captured, and for place names too vague to pin
+  /// (a region rather than a spot). Anything with a null pair is simply
+  /// left off the map rather than guessed at.
+  final double? latitude;
+  final double? longitude;
+
   const Location({
     required this.id,
     required this.name,
     this.region,
     required this.postCount,
     required this.category,
+    this.latitude,
+    this.longitude,
   });
+
+  /// True only when this place can be put on a map.
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   factory Location.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -80,6 +118,8 @@ class Location {
       region: data['region'] as String?,
       postCount: (data['postCount'] as num?)?.toInt() ?? 0,
       category: data['category'] as String? ?? '',
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -89,6 +129,8 @@ class Location {
       'region': region,
       'postCount': postCount,
       'category': category,
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 }
@@ -104,6 +146,11 @@ class PhotoPost {
   final String category;
   final DateTime? createdAt;
 
+  /// What the original file said about itself, read before the upload was
+  /// compressed. [PhotoMetadata.empty] for photos uploaded before capture
+  /// existed, and for files that carried nothing.
+  final PhotoMetadata metadata;
+
   const PhotoPost({
     required this.id,
     required this.imageUrl,
@@ -114,6 +161,7 @@ class PhotoPost {
     this.aspectRatio = 1.0,
     this.category = '',
     this.createdAt,
+    this.metadata = PhotoMetadata.empty,
   });
 
   factory PhotoPost.fromFirestore(DocumentSnapshot doc) {
@@ -126,6 +174,8 @@ class PhotoPost {
       region: data['locationRegion'] as String?,
       postCount: 0,
       category: data['category'] as String? ?? '',
+      latitude: (data['locationLat'] as num?)?.toDouble(),
+      longitude: (data['locationLng'] as num?)?.toDouble(),
     );
 
     // Build a lightweight user profile from the flat fields
@@ -150,6 +200,9 @@ class PhotoPost {
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
+      metadata: PhotoMetadata.fromFirestore(
+        data['metadata'] as Map<String, dynamic>?,
+      ),
     );
   }
 
@@ -159,6 +212,8 @@ class PhotoPost {
       'locationId': location.id,
       'locationName': location.name,
       'locationRegion': location.region,
+      'locationLat': location.latitude,
+      'locationLng': location.longitude,
       'category': category.isNotEmpty ? category : location.category,
       'userId': user.id,
       'userName': user.name,
@@ -168,6 +223,7 @@ class PhotoPost {
       'commentCount': commentCount,
       'aspectRatio': aspectRatio,
       'createdAt': FieldValue.serverTimestamp(),
+      'metadata': metadata.toFirestore(),
     };
   }
 }

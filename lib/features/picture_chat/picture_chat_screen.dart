@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
-import '../../core/data/mock_data.dart';
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/services/photo_deletion_service.dart';
+import '../../core/utils/directions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
@@ -19,11 +20,46 @@ class PictureChatScreen extends StatelessWidget {
     return FutureBuilder<PhotoPost?>(
       future: FirestoreService().getPhoto(photoId),
       builder: (context, snapshot) {
-        final photo = snapshot.data ??
-            MockPhotos.hikingPhotos.firstWhere(
-              (p) => p.id == photoId,
-              orElse: () => MockPhotos.hikingPhotos.first,
-            );
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final photo = snapshot.data;
+        if (photo == null) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: onClose ?? () => Navigator.pop(context),
+              ),
+              title: const Text('Photo Not Found'),
+            ),
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.broken_image,
+                    size: 64,
+                    color: AppColors.textSecondary,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'This photo could not be found.',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'It may have been deleted.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
         return ResponsiveLayout(
           mobileLayout: _MobilePictureChat(photo: photo, onClose: onClose),
@@ -42,11 +78,17 @@ class _MobilePictureChat extends StatelessWidget {
 
   const _MobilePictureChat({required this.photo, this.onClose});
 
-  void _addComment(String text) async {
+  void _addComment(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
-    final userProfile = currentUser != null
-        ? UserProfile.fromFirebaseUser(currentUser)
-        : MockUsers.me;
+    if (currentUser == null) {
+      // A comment signed by a placeholder account would not belong to anyone,
+      // so it could never be edited, deleted, or counted on a profile.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to add a comment.')),
+      );
+      return;
+    }
+    final userProfile = UserProfile.fromFirebaseUser(currentUser);
     final comment = Comment(
       id: '',
       user: userProfile,
@@ -77,7 +119,11 @@ class _MobilePictureChat extends StatelessWidget {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
+                      child: const Icon(
+                        Icons.landscape,
+                        size: 64,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                   // Back button
@@ -88,7 +134,11 @@ class _MobilePictureChat extends StatelessWidget {
                       backgroundColor: Colors.black45,
                       radius: 18,
                       child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                        icon: const Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         onPressed: onClose ?? () => Navigator.pop(context),
                         padding: EdgeInsets.zero,
                       ),
@@ -99,7 +149,8 @@ class _MobilePictureChat extends StatelessWidget {
                     bottom: 12,
                     left: 12,
                     child: LocationPill(
-                      locationName: '${photo.location.name} · ${photo.location.region ?? ''}',
+                      locationName:
+                          '${photo.location.name} · ${photo.location.region ?? ''}',
                     ),
                   ),
                 ],
@@ -123,11 +174,17 @@ class _MobilePictureChat extends StatelessWidget {
                       children: [
                         Text(
                           photo.user.name,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         Text(
                           photo.user.role ?? 'Contributor',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -142,7 +199,11 @@ class _MobilePictureChat extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
                     onSelected: (val) async {
                       if (val == 'edit') {
                         EditPhotoDialog.show(context, photo);
@@ -151,19 +212,31 @@ class _MobilePictureChat extends StatelessWidget {
                           context: context,
                           builder: (ctx) => AlertDialog(
                             title: const Text('Delete Photo?'),
-                            content: const Text('Are you sure you want to delete this photo post?'),
+                            content: const Text(
+                              'Are you sure you want to delete this photo post?',
+                            ),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx, true),
-                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
                                 child: const Text('Delete'),
                               ),
                             ],
                           ),
                         );
                         if (confirm == true) {
-                          await firestoreService.deletePhoto(photo.id);
+                          // Image file and comments go with it; deleting only
+                          // the document would strand both.
+                          await PhotoDeletionService().deleteOne(
+                            photoId: photo.id,
+                            imageUrl: photo.imageUrl,
+                          );
                           if (context.mounted) {
                             (onClose ?? () => Navigator.pop(context))();
                           }
@@ -187,13 +260,27 @@ class _MobilePictureChat extends StatelessWidget {
                           children: [
                             Icon(Icons.delete, size: 18, color: Colors.red),
                             SizedBox(width: 8),
-                            Text('Delete Photo', style: TextStyle(color: Colors.red)),
+                            Text(
+                              'Delete Photo',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ],
+              ),
+            ),
+
+            // Directions sit between the photo and the conversation: the
+            // widget hides itself when the location has no coordinates, so
+            // this row simply is not there for photos that cannot be found.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: DirectionsButton(photo: photo),
               ),
             ),
 
@@ -207,34 +294,57 @@ class _MobilePictureChat extends StatelessWidget {
                   // Comments header
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    // Both children must be able to give ground: a long
+                    // category such as "Museums - Historic Sites" overflowed
+                    // this row when neither could shrink.
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Comments & Discussion',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        const Expanded(
+                          child: Text(
+                            'Comments & Discussion',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.landscape, size: 14, color: AppColors.primary),
-                              const SizedBox(width: 4),
-                              Text(
-                                photo.location.category.isNotEmpty ? photo.location.category : 'Spot',
-                                style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500),
-                              ),
-                            ],
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.landscape,
+                                  size: 14,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    photo.location.category.isNotEmpty
+                                        ? photo.location.category
+                                        : 'Spot',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -246,15 +356,20 @@ class _MobilePictureChat extends StatelessWidget {
                     child: StreamBuilder<List<Comment>>(
                       stream: firestoreService.streamComments(photo.id),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
 
                         final comments = snapshot.data ?? [];
                         if (comments.isEmpty) {
                           return const Center(
-                            child: Text('No comments yet. Leave a comment! 💬',
-                                style: TextStyle(color: AppColors.textSecondary)),
+                            child: Text(
+                              'No comments yet. Leave a comment! 💬',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
                           );
                         }
 
@@ -262,7 +377,10 @@ class _MobilePictureChat extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: comments.length,
                           itemBuilder: (context, index) {
-                            return _CommentTile(photoId: photo.id, comment: comments[index]);
+                            return _CommentTile(
+                              photoId: photo.id,
+                              comment: comments[index],
+                            );
                           },
                         );
                       },
@@ -272,7 +390,7 @@ class _MobilePictureChat extends StatelessWidget {
                   // Input
                   ChatInputBar(
                     hintText: 'Add a comment...',
-                    onSend: _addComment,
+                    onSend: (text) => _addComment(context, text),
                   ),
                 ],
               ),
@@ -292,11 +410,17 @@ class _WebPictureModal extends StatelessWidget {
 
   const _WebPictureModal({required this.photo, this.onClose});
 
-  void _addComment(String text) async {
+  void _addComment(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
-    final userProfile = currentUser != null
-        ? UserProfile.fromFirebaseUser(currentUser)
-        : MockUsers.me;
+    if (currentUser == null) {
+      // A comment signed by a placeholder account would not belong to anyone,
+      // so it could never be edited, deleted, or counted on a profile.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to add a comment.')),
+      );
+      return;
+    }
+    final userProfile = UserProfile.fromFirebaseUser(currentUser);
     final comment = Comment(
       id: '',
       user: userProfile,
@@ -314,198 +438,280 @@ class _WebPictureModal extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black26,
       body: Center(
-        child: Container(
-          width: 860,
-          height: 520,
-          margin: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 32,
-                offset: const Offset(0, 8),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Size the modal to the available window space (minus margin)
+            // so it never gets clipped/overlapped when the browser is resized.
+            final width = (constraints.maxWidth * 0.85).clamp(360.0, 1400.0);
+            final height = (constraints.maxHeight * 0.85).clamp(360.0, 820.0);
+            return Container(
+              width: width,
+              height: height,
+              margin: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 32,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Row(
-            children: [
-              // Left: Photo
-              Expanded(
-                flex: 5,
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            photo.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.surfaceVariant,
-                              child: const Icon(Icons.landscape, size: 64, color: AppColors.textSecondary),
-                            ),
-                          ),
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            child: LocationPill(
-                              locationName: '${photo.location.name} · ${photo.location.region ?? ''}',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // User info bar
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      color: Colors.white,
-                      child: Row(
-                        children: [
-                          UserAvatar(
-                            initials: photo.user.initials,
-                            color: photo.user.avatarColor,
-                            size: 32,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(photo.user.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                Text(
-                                  '${photo.user.role ?? "Contributor"} · Bay Area',
-                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              if (photo.id.isNotEmpty) {
-                                firestoreService.incrementHeartCount(photo.id);
-                              }
-                            },
-                            child: HeartCount(count: photo.heartCount),
-                          ),
-                          const SizedBox(width: 12),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                            onSelected: (val) async {
-                              if (val == 'edit') {
-                                EditPhotoDialog.show(context, photo);
-                              } else if (val == 'delete') {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('Delete Photo?'),
-                                    content: const Text('Are you sure you want to delete this photo post?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                        child: const Text('Delete'),
-                                      ),
-                                    ],
+              clipBehavior: Clip.antiAlias,
+              child: Row(
+                children: [
+                  // Left: Photo
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(
+                                color: Colors.black,
+                                child: Image.network(
+                                  photo.imageUrl,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: AppColors.surfaceVariant,
+                                    child: const Icon(
+                                      Icons.landscape,
+                                      size: 64,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
-                                );
-                                if (confirm == true) {
-                                  await firestoreService.deletePhoto(photo.id);
-                                  if (context.mounted) {
-                                    (onClose ?? () => Navigator.pop(context))();
-                                  }
-                                }
-                              }
-                            },
-                            itemBuilder: (_) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Edit Photo'),
-                                  ],
                                 ),
                               ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 18, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Delete Photo', style: TextStyle(color: Colors.red)),
-                                  ],
+                              Positioned(
+                                top: 12,
+                                left: 12,
+                                child: LocationPill(
+                                  locationName:
+                                      '${photo.location.name} · ${photo.location.region ?? ''}',
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                        // User info bar
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          color: Colors.white,
+                          child: Row(
+                            children: [
+                              UserAvatar(
+                                initials: photo.user.initials,
+                                color: photo.user.avatarColor,
+                                size: 32,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      photo.user.name,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${photo.user.role ?? "Contributor"} · Bay Area',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  if (photo.id.isNotEmpty) {
+                                    firestoreService.incrementHeartCount(
+                                      photo.id,
+                                    );
+                                  }
+                                },
+                                child: HeartCount(count: photo.heartCount),
+                              ),
+                              const SizedBox(width: 12),
+                              PopupMenuButton<String>(
+                                icon: const Icon(
+                                  Icons.more_vert,
+                                  size: 20,
+                                  color: AppColors.textSecondary,
+                                ),
+                                onSelected: (val) async {
+                                  if (val == 'edit') {
+                                    EditPhotoDialog.show(context, photo);
+                                  } else if (val == 'delete') {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Delete Photo?'),
+                                        content: const Text(
+                                          'Are you sure you want to delete this photo post?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, true),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.red,
+                                            ),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      // Image file and comments go with it.
+                                      await PhotoDeletionService().deleteOne(
+                                        photoId: photo.id,
+                                        imageUrl: photo.imageUrl,
+                                      );
+                                      if (context.mounted) {
+                                        (onClose ??
+                                            () => Navigator.pop(context))();
+                                      }
+                                    }
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Edit Photo'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.delete,
+                                          size: 18,
+                                          color: Colors.red,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Delete Photo',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Directions sits on its own row under the photo rather than as an
+                        // icon in the crowded user bar, where it was easy to miss.
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: DirectionsButton(
+                              photo: photo,
+                              prominent: true,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
 
-              const VerticalDivider(width: 1),
+                  const VerticalDivider(width: 1),
 
-              // Right: Comments
-              Expanded(
-                flex: 3,
-                child: Column(
-                  children: [
-                    // Close button
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 20),
-                        onPressed: onClose ?? () => Navigator.pop(context),
-                      ),
-                    ),
+                  // Right: Comments
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      children: [
+                        // Close button
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          alignment: Alignment.centerRight,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: onClose ?? () => Navigator.pop(context),
+                          ),
+                        ),
 
-                    // Comments stream
-                    Expanded(
-                      child: StreamBuilder<List<Comment>>(
-                        stream: firestoreService.streamComments(photo.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
+                        // Comments stream
+                        Expanded(
+                          child: StreamBuilder<List<Comment>>(
+                            stream: firestoreService.streamComments(photo.id),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
 
-                          final comments = snapshot.data ?? [];
-                          if (comments.isEmpty) {
-                            return const Center(
-                              child: Text('No comments yet. Leave a comment! 💬',
-                                  style: TextStyle(color: AppColors.textSecondary)),
-                            );
-                          }
+                              final comments = snapshot.data ?? [];
+                              if (comments.isEmpty) {
+                                return const Center(
+                                  child: Text(
+                                    'No comments yet. Leave a comment! 💬',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                );
+                              }
 
-                          return ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: comments.length,
-                            itemBuilder: (context, index) {
-                              return _CommentTile(photoId: photo.id, comment: comments[index]);
+                              return ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                itemCount: comments.length,
+                                itemBuilder: (context, index) {
+                                  return _CommentTile(
+                                    photoId: photo.id,
+                                    comment: comments[index],
+                                  );
+                                },
+                              );
                             },
-                          );
-                        },
-                      ),
-                    ),
+                          ),
+                        ),
 
-                    // Input
-                    ChatInputBar(
-                      hintText: 'Add a comment...',
-                      onSend: _addComment,
+                        // Input
+                        ChatInputBar(
+                          hintText: 'Add a comment...',
+                          onSend: (text) => _addComment(context, text),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -543,7 +749,11 @@ class _CommentTile extends StatelessWidget {
             onPressed: () async {
               final newText = controller.text.trim();
               if (newText.isNotEmpty && comment.id.isNotEmpty) {
-                await FirestoreService().updateComment(photoId, comment.id, newText);
+                await FirestoreService().updateComment(
+                  photoId,
+                  comment.id,
+                  newText,
+                );
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
@@ -580,18 +790,28 @@ class _CommentTile extends StatelessWidget {
                   children: [
                     Text(
                       comment.user.name,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     if (comment.id.isNotEmpty)
                       PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.textSecondary),
+                        icon: const Icon(
+                          Icons.more_horiz,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onSelected: (val) async {
                           if (val == 'edit') {
                             _showEditCommentDialog(context);
                           } else if (val == 'delete') {
-                            await FirestoreService().deleteComment(photoId, comment.id);
+                            await FirestoreService().deleteComment(
+                              photoId,
+                              comment.id,
+                            );
                           }
                         },
                         itemBuilder: (_) => [
@@ -611,7 +831,10 @@ class _CommentTile extends StatelessWidget {
                               children: [
                                 Icon(Icons.delete, size: 16, color: Colors.red),
                                 SizedBox(width: 6),
-                                Text('Delete Comment', style: TextStyle(color: Colors.red)),
+                                Text(
+                                  'Delete Comment',
+                                  style: TextStyle(color: Colors.red),
+                                ),
                               ],
                             ),
                           ),
@@ -622,14 +845,21 @@ class _CommentTile extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   comment.text,
-                  style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.textPrimary),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Text(
                       comment.timestamp,
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     if (comment.heartCount > 0) ...[
                       const SizedBox(width: 10),
@@ -641,6 +871,104 @@ class _CommentTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Get Directions" for a photo, shown only when its location can actually be
+/// navigated to. Photos labelled with a region rather than a place have no
+/// coordinates, and offering directions to nowhere would be worse than
+/// offering nothing.
+class DirectionsButton extends StatefulWidget {
+  final PhotoPost photo;
+  final bool compact;
+
+  /// Filled rather than outlined. Used on web, where the photo modal has more
+  /// competing controls than the mobile page and an outlined button recedes.
+  final bool prominent;
+
+  const DirectionsButton({
+    super.key,
+    required this.photo,
+    this.compact = false,
+    this.prominent = false,
+  });
+
+  @override
+  State<DirectionsButton> createState() => _DirectionsButtonState();
+}
+
+class _DirectionsButtonState extends State<DirectionsButton> {
+  bool _opening = false;
+
+  Future<void> _go() async {
+    setState(() => _opening = true);
+    final error = await Directions.toLocation(widget.photo.location);
+    if (!mounted) return;
+    setState(() => _opening = false);
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  /// Long enough to wrap on a narrow phone, so both button variants centre
+  /// the text and allow two lines rather than clipping it.
+  static const _label = 'Get Directions to Location Where Picture Was Taken';
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.photo.location.hasCoordinates) return const SizedBox.shrink();
+
+    final icon = _opening
+        ? SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: widget.prominent ? Colors.white : null,
+            ),
+          )
+        : Icon(Icons.directions, size: widget.prominent ? 20 : 18);
+
+    if (widget.compact) {
+      return IconButton(
+        icon: icon,
+        tooltip: '$_label (${widget.photo.location.name})',
+        onPressed: _opening ? null : _go,
+      );
+    }
+
+    if (widget.prominent) {
+      return FilledButton.icon(
+        onPressed: _opening ? null : _go,
+        icon: icon,
+        label: const Text(
+          _label,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+
+    return OutlinedButton.icon(
+      onPressed: _opening ? null : _go,
+      icon: icon,
+      label: const Text(_label, textAlign: TextAlign.center),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary,
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       ),
     );
   }

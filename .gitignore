@@ -43,3 +43,44 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing material and local secrets — these belong in Codemagic environment
+# groups (android_signing / ios_signing / play_store / app_store), never here.
+#
+# Note: google-services.json, GoogleService-Info.plist and firebase_options_*.dart
+# are deliberately NOT ignored. They are client configuration, not secrets —
+# access is gated by Firestore rules and API key restrictions.
+**/android/key.properties
+**/*.jks
+**/*.keystore
+*.p8
+*.p12
+*.pem
+*.cer
+*.certSigningRequest
+*.mobileprovision
+**/ios/ExportOptions.plist
+.env
+.env.*
+!.env.example
+
+# Google Maps API key (iOS)
+ios/Flutter/Maps.xcconfig
+
+# Build output. The existing /build/ rule is root-anchored and misses this one.
+**/build/
+
+# Editor-local settings
+.vscode/
+
+# Working copies left by scripted edits to Xcode/plist files
+*.bak
+*.bak2
+
+# Local safety copies of Firestore documents taken before bulk edits.
+# Operational records, not source.
+firestore-backup-*/
+firestore-seed-backup-*/
+
+# Scratch file from an unrelated project
+/TEMP

@@ -11,19 +11,45 @@ class SignInScreen extends StatefulWidget {
   State<SignInScreen> createState() => _SignInScreenState();
 }
 
-class _SignInScreenState extends State<SignInScreen> {
+class _SignInScreenState extends State<SignInScreen>
+    with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isSignUp = false;
   String? _error;
+  bool _showForgotPassword = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Google and Apple hand off to a browser or Custom Tab. If the person
+    // backs out instead of finishing, the provider future can stay pending
+    // forever on Android — which would leave every control disabled and the
+    // screen looking frozen. Coming back with nobody signed in means that
+    // attempt is over.
+    if (state == AppLifecycleState.resumed &&
+        _isLoading &&
+        _authService.currentUser == null) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Sign-in was cancelled.';
+      });
+    }
   }
 
   Future<void> _signInWithGoogle() async {
@@ -34,13 +60,29 @@ class _SignInScreenState extends State<SignInScreen> {
 
     final result = await _authService.signInWithGoogle();
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (result != null) {
-        widget.onSignedIn();
-      } else {
-        setState(() => _error = 'Google sign-in was cancelled or failed.');
-      }
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (result.isSuccess) {
+      widget.onSignedIn();
+    } else {
+      setState(() => _error = result.error);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await _authService.signInWithApple();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (result.isSuccess) {
+      widget.onSignedIn();
+    } else {
+      setState(() => _error = result.error);
     }
   }
 
@@ -67,12 +109,64 @@ class _SignInScreenState extends State<SignInScreen> {
 
     if (mounted) {
       setState(() => _isLoading = false);
-      if (result != null) {
+      if (result.isSuccess) {
         widget.onSignedIn();
       } else {
-        setState(() => _error = _isSignUp
-            ? 'Failed to create account. Try a stronger password.'
-            : 'Invalid email or password.');
+        setState(() {
+          _error = result.error;
+          if (!_isSignUp) _showForgotPassword = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await _authService.signInAsGuest();
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (result.isSuccess) {
+      widget.onSignedIn();
+    } else {
+      setState(() => _error = result.error);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Please enter your email address first.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final errorMsg = await _authService.sendPasswordResetEmail(email);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (errorMsg == null) {
+        setState(() {
+          _error = null;
+          _showForgotPassword = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Password reset email sent to $email'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        setState(() => _error = errorMsg);
       }
     }
   }
@@ -98,7 +192,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "Bill's Fun Things",
+                  "Bill's Bay Area",
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 28,
@@ -107,7 +201,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
                 Text(
-                  'In The Bay Area!',
+                  'Fun Activities',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -127,6 +221,22 @@ class _SignInScreenState extends State<SignInScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     side: BorderSide(color: AppColors.divider),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Apple Sign-In
+                FilledButton.icon(
+                  onPressed: _isLoading ? null : _signInWithApple,
+                  icon: const Icon(Icons.apple, size: 24),
+                  label: const Text('Continue with Apple'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -182,11 +292,24 @@ class _SignInScreenState extends State<SignInScreen> {
                 // Error message
                 if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
                       _error!,
                       style: const TextStyle(color: Colors.red, fontSize: 13),
                       textAlign: TextAlign.center,
+                    ),
+                  ),
+
+                // Forgot Password link
+                if (_showForgotPassword && !_isSignUp)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _resetPassword,
+                      child: const Text(
+                        'Forgot Password? Tap to reset',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
 
@@ -219,6 +342,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     setState(() {
                       _isSignUp = !_isSignUp;
                       _error = null;
+                      _showForgotPassword = false;
                     });
                   },
                   child: Text(
@@ -226,6 +350,45 @@ class _SignInScreenState extends State<SignInScreen> {
                         ? 'Already have an account? Sign In'
                         : "Don't have an account? Create One",
                     style: TextStyle(color: AppColors.primary),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Guest entry — no account needed, register later
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: AppColors.divider)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'or',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: AppColors.divider)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _continueAsGuest,
+                  icon: const Icon(Icons.person_outline, size: 20),
+                  label: const Text('Continue as Guest'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: AppColors.divider),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Look around first. You can register later and keep your '
+                  'chat history.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],

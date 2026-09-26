@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../services/firestore_service.dart';
 
 class UserAvatar extends StatelessWidget {
   final String initials;
@@ -116,6 +117,106 @@ class HeartCount extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Location name entry field that offers previously-used location names
+/// (subcategories within the selected category) as a dropdown, with an
+/// option to enter a brand new one.
+class LocationNameField extends StatefulWidget {
+  final String category;
+  final TextEditingController controller;
+  final FirestoreService firestoreService;
+  final bool isDense;
+
+  const LocationNameField({
+    super.key,
+    required this.category,
+    required this.controller,
+    required this.firestoreService,
+    this.isDense = false,
+  });
+
+  @override
+  State<LocationNameField> createState() => _LocationNameFieldState();
+}
+
+class _LocationNameFieldState extends State<LocationNameField> {
+  static const _addNewValue = '__add_new_location__';
+
+  bool _isNewEntry = false;
+
+  @override
+  void didUpdateWidget(covariant LocationNameField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.category != widget.category) {
+      // Locations are scoped to category, so switching category invalidates
+      // whatever was picked/typed before.
+      _isNewEntry = false;
+      widget.controller.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<String>>(
+      stream: widget.firestoreService.streamDistinctLocations(widget.category),
+      builder: (context, snapshot) {
+        final locations = snapshot.data ?? const <String>[];
+
+        if (_isNewEntry || locations.isEmpty) {
+          return TextFormField(
+            controller: widget.controller,
+            decoration: InputDecoration(
+              labelText: 'Location Name',
+              hintText: 'e.g. Vasona Lake, Almaden Lake',
+              border: const OutlineInputBorder(),
+              isDense: widget.isDense,
+              suffixIcon: locations.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.list),
+                      tooltip: 'Choose an existing location',
+                      onPressed: () => setState(() => _isNewEntry = false),
+                    )
+                  : null,
+            ),
+            validator: (val) =>
+                (val == null || val.trim().isEmpty) ? 'Please enter a location name' : null,
+          );
+        }
+
+        final currentValue = locations.contains(widget.controller.text)
+            ? widget.controller.text
+            : null;
+
+        return DropdownButtonFormField<String>(
+          initialValue: currentValue,
+          decoration: InputDecoration(
+            labelText: 'Location Name',
+            hintText: 'Select a location',
+            border: const OutlineInputBorder(),
+            isDense: widget.isDense,
+          ),
+          items: [
+            ...locations.map((loc) => DropdownMenuItem(value: loc, child: Text(loc))),
+            const DropdownMenuItem(
+              value: _addNewValue,
+              child: Text('+ Add new location'),
+            ),
+          ],
+          validator: (val) =>
+              (val == null || val.isEmpty) ? 'Please select or add a location' : null,
+          onChanged: (val) {
+            if (val == _addNewValue) {
+              setState(() => _isNewEntry = true);
+              widget.controller.clear();
+            } else if (val != null) {
+              setState(() => widget.controller.text = val);
+            }
+          },
+        );
+      },
     );
   }
 }

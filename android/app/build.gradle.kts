@@ -1,3 +1,13 @@
+import java.util.Properties
+
+// Maps key lives in android/local.properties, which git ignores, so the key
+// is never committed. Missing key -> empty placeholder -> map tiles fail to
+// load with a clear log message rather than a build error.
+val mapsApiKey: String = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}.getProperty("MAPS_API_KEY") ?: ""
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -28,6 +38,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     flavorDimensions += "environment"
@@ -35,16 +46,16 @@ android {
         create("dev") {
             dimension = "environment"
             applicationIdSuffix = ".dev"
-            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area! (Dev)")
+            resValue("string", "app_name", "Bill\\'s Bay Area Fun Activities (Dev)")
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
-            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area! (Staging)")
+            resValue("string", "app_name", "Bill\\'s Bay Area Fun Activities (Staging)")
         }
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "Bill\\'s Fun Things To Do In The Bay Area!")
+            resValue("string", "app_name", "Bill\\'s Bay Area Fun Activities")
         }
     }
 

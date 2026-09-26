@@ -3,23 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>978335208017-ktkgne3aj7uqmu147unpk0imghq7d8g9.apps.googleusercontent.com</string>
+	<string>1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.978335208017-ktkgne3aj7uqmu147unpk0imghq7d8g9</string>
-	<key>ANDROID_CLIENT_ID</key>
-	<string>978335208017-apbupuh9aekkfhq4jnitibaj25uuhd7l.apps.googleusercontent.com</string>
+	<string>com.googleusercontent.apps.1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg</string>
 	<key>API_KEY</key>
-	<string>AIzaSyDXClf2-of81jp16rYSXE7dp2hu3kh3u0g</string>
+	<string>AIzaSyDTckDCf5paqwTKC5pQrDhZET6ZmsT8DBU</string>
 	<key>GCM_SENDER_ID</key>
-	<string>978335208017</string>
+	<string>1036671893175</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.billsbayarea.app</string>
+	<string>com.billsbayarea.app.dev</string>
 	<key>PROJECT_ID</key>
-	<string>photos-activities-prod</string>
+	<string>photos-activities-dev</string>
 	<key>STORAGE_BUCKET</key>
-	<string>photos-activities-prod.firebasestorage.app</string>
+	<string>photos-activities-dev.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -31,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:978335208017:ios:950d1ff7ba059507e79e70</string>
+	<string>1:1036671893175:ios:1a2183343110786a3bd732</string>
 </dict>
 </plist>

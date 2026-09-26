@@ -1,4 +1,4 @@
 // Staging flavor configuration
 PRODUCT_BUNDLE_IDENTIFIER = com.billsbayarea.app.staging
 PRODUCT_NAME = BillsFunThings Staging
-DISPLAY_NAME = Bill's Fun Things (Staging)
+DISPLAY_NAME = Bill's Bay Area Fun Activities (Staging)

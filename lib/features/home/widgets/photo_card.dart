@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/photo_deletion_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import 'edit_photo_dialog.dart';
@@ -19,16 +20,11 @@ class PhotoCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Stack(
           children: [
-            // Photo – no forced aspect ratio; let masonry handle sizing
-            Image.network(
-              photo.imageUrl,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: 180,
-                color: AppColors.surfaceVariant,
-                child: const Icon(Icons.landscape, size: 48, color: AppColors.textSecondary),
-              ),
+            // Photo – sized to the image's real aspect ratio so the masonry
+            // grid cell matches its shape and nothing gets cropped off.
+            _AutoAspectImage(
+              imageUrl: photo.imageUrl,
+              fallbackAspectRatio: (photo.aspectRatio > 0) ? photo.aspectRatio : 1.2,
             ),
 
             // Location pill (top-left)
@@ -71,10 +67,21 @@ class PhotoCard extends StatelessWidget {
                       ),
                     );
                     if (confirm == true) {
-                      await FirestoreService().deletePhoto(photo.id);
+                      // Removes the image file and comments too, not just the
+                      // document — a document-only delete leaves both stranded.
+                      final result = await PhotoDeletionService().deleteOne(
+                        photoId: photo.id,
+                        imageUrl: photo.imageUrl,
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Photo deleted')),
+                          SnackBar(
+                            content: Text(
+                              result.failed > 0
+                                  ? 'Could not delete that photo.'
+                                  : 'Photo deleted',
+                            ),
+                          ),
                         );
                       }
                     }
@@ -165,6 +172,79 @@ class PhotoCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sizes itself to the network image's real width/height so masonry grid
+/// cells match the photo's true shape instead of a stale/placeholder ratio,
+/// so [BoxFit.cover] never has to crop content away.
+class _AutoAspectImage extends StatefulWidget {
+  final String imageUrl;
+  final double fallbackAspectRatio;
+
+  const _AutoAspectImage({
+    required this.imageUrl,
+    required this.fallbackAspectRatio,
+  });
+
+  @override
+  State<_AutoAspectImage> createState() => _AutoAspectImageState();
+}
+
+class _AutoAspectImageState extends State<_AutoAspectImage> {
+  double? _aspectRatio;
+  ImageStream? _imageStream;
+  late final ImageStreamListener _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _listener = ImageStreamListener(_onImageResolved, onError: (_, __) {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveImage();
+  }
+
+  void _resolveImage() {
+    final newStream = NetworkImage(widget.imageUrl).resolve(
+      createLocalImageConfiguration(context),
+    );
+    if (newStream.key == _imageStream?.key) return;
+    _imageStream?.removeListener(_listener);
+    _imageStream = newStream;
+    _imageStream!.addListener(_listener);
+  }
+
+  void _onImageResolved(ImageInfo info, bool _) {
+    final ratio = info.image.width / info.image.height;
+    if (mounted && ratio != _aspectRatio) {
+      setState(() => _aspectRatio = ratio);
+    }
+  }
+
+  @override
+  void dispose() {
+    _imageStream?.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: _aspectRatio ?? widget.fallbackAspectRatio,
+      child: Image.network(
+        widget.imageUrl,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: AppColors.surfaceVariant,
+          child: const Icon(Icons.landscape, size: 48, color: AppColors.textSecondary),
         ),
       ),
     );

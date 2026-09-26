@@ -8,13 +8,20 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   EnvConfig.init(EnvConfig(
     environment: Environment.dev,
-    title: "Bill's Fun Things To Do In The Bay Area! (Dev)",
+    title: "Bill's Bay Area Fun Activities (Dev)",
     firebaseProjectId: "photos-activities-dev",
+    googleServerClientId:
+        "1036671893175-u1tqrdfs780uq10c9dnjk3dqtmnrjaqg.apps.googleusercontent.com",
   ));
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // Firebase already initialized (e.g. during hot restart)
+    // Just use the existing instance.
+  }
 
   runApp(const BillsBayAreaApp());
 }
