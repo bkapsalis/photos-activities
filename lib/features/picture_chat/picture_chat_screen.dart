@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
@@ -106,300 +108,357 @@ class _MobilePictureChat extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Photo section (~40%)
-            Expanded(
-              flex: 4,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    photo.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(
-                        Icons.landscape,
-                        size: 64,
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              // Photo section: as tall as the photo is at full width, so it is
+              // never cropped, but capped so the chat always keeps 45% of the
+              // screen. A photo that does not fit exactly is letterboxed.
+              SizedBox(
+                height: _photoHeight(constraints),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Colors.black),
+                    Image.network(
+                      photo.imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.surfaceVariant,
+                        child: const Icon(
+                          Icons.landscape,
+                          size: 64,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    // Back button
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.black45,
+                        radius: 18,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          onPressed: onClose ?? () => Navigator.pop(context),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    // Location pill
+                    Positioned(
+                      bottom: 12,
+                      left: 12,
+                      child: LocationPill(
+                        locationName:
+                            '${photo.location.name} · ${photo.location.region ?? ''}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // User info row & Photo Actions
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    UserAvatar(
+                      initials: photo.user.initials,
+                      color: photo.user.avatarColor,
+                      size: 36,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            photo.user.name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            photo.user.role ?? 'Contributor',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        if (photo.id.isNotEmpty) {
+                          firestoreService.incrementHeartCount(photo.id);
+                        }
+                      },
+                      child: HeartCount(count: photo.heartCount),
+                    ),
+                    const SizedBox(width: 12),
+                    PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_vert,
+                        size: 20,
                         color: AppColors.textSecondary,
                       ),
-                    ),
-                  ),
-                  // Back button
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.black45,
-                      radius: 18,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.arrow_back,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        onPressed: onClose ?? () => Navigator.pop(context),
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-                  // Location pill
-                  Positioned(
-                    bottom: 12,
-                    left: 12,
-                    child: LocationPill(
-                      locationName:
-                          '${photo.location.name} · ${photo.location.region ?? ''}',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // User info row & Photo Actions
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  UserAvatar(
-                    initials: photo.user.initials,
-                    color: photo.user.avatarColor,
-                    size: 36,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          photo.user.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          photo.user.role ?? 'Contributor',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      if (photo.id.isNotEmpty) {
-                        firestoreService.incrementHeartCount(photo.id);
-                      }
-                    },
-                    child: HeartCount(count: photo.heartCount),
-                  ),
-                  const SizedBox(width: 12),
-                  PopupMenuButton<String>(
-                    icon: const Icon(
-                      Icons.more_vert,
-                      size: 20,
-                      color: AppColors.textSecondary,
-                    ),
-                    onSelected: (val) async {
-                      if (val == 'edit') {
-                        EditPhotoDialog.show(context, photo);
-                      } else if (val == 'delete') {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Delete Photo?'),
-                            content: const Text(
-                              'Are you sure you want to delete this photo post?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancel'),
+                      onSelected: (val) async {
+                        if (val == 'edit') {
+                          EditPhotoDialog.show(context, photo);
+                        } else if (val == 'delete') {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Delete Photo?'),
+                              content: const Text(
+                                'Are you sure you want to delete this photo post?',
                               ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red,
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel'),
                                 ),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          // Image file and comments go with it; deleting only
-                          // the document would strand both.
-                          await PhotoDeletionService().deleteOne(
-                            photoId: photo.id,
-                            imageUrl: photo.imageUrl,
-                          );
-                          if (context.mounted) {
-                            (onClose ?? () => Navigator.pop(context))();
-                          }
-                        }
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit Photo'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text(
-                              'Delete Photo',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Directions sit between the photo and the conversation: the
-            // widget hides itself when the location has no coordinates, so
-            // this row simply is not there for photos that cannot be found.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: SizedBox(
-                width: double.infinity,
-                child: DirectionsButton(photo: photo),
-              ),
-            ),
-
-            const Divider(height: 1),
-
-            // Comments section (~60%)
-            Expanded(
-              flex: 6,
-              child: Column(
-                children: [
-                  // Comments header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    // Both children must be able to give ground: a long
-                    // category such as "Museums - Historic Sites" overflowed
-                    // this row when neither could shrink.
-                    child: Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Comments & Discussion',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.landscape,
-                                  size: 14,
-                                  color: AppColors.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    photo.location.category.isNotEmpty
-                                        ? photo.location.category
-                                        : 'Spot',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
                                   ),
+                                  child: const Text('Delete'),
                                 ),
                               ],
                             ),
+                          );
+                          if (confirm == true) {
+                            // Image file and comments go with it; deleting only
+                            // the document would strand both.
+                            await PhotoDeletionService().deleteOne(
+                              photoId: photo.id,
+                              imageUrl: photo.imageUrl,
+                            );
+                            if (context.mounted) {
+                              (onClose ?? () => Navigator.pop(context))();
+                            }
+                          }
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, size: 18),
+                              SizedBox(width: 8),
+                              Text('Edit Photo'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete Photo',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-
-                  // Comments stream
-                  Expanded(
-                    child: StreamBuilder<List<Comment>>(
-                      stream: firestoreService.streamComments(photo.id),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-
-                        final comments = snapshot.data ?? [];
-                        if (comments.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              'No comments yet. Leave a comment! 💬',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          );
-                        }
-
-                        return ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: comments.length,
-                          itemBuilder: (context, index) {
-                            return _CommentTile(
-                              photoId: photo.id,
-                              comment: comments[index],
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                  // Input
-                  ChatInputBar(
-                    hintText: 'Add a comment...',
-                    onSend: (text) => _addComment(context, text),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              // Directions sit between the photo and the conversation: the
+              // widget hides itself when the location has no coordinates, so
+              // this row simply is not there for photos that cannot be found.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: DirectionsButton(photo: photo),
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // Comments section: whatever the photo leaves, at least 45%.
+              Expanded(
+                child: Column(
+                  children: [
+                    // Comments header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      // Both children must be able to give ground: a long
+                      // category such as "Museums - Historic Sites" overflowed
+                      // this row when neither could shrink.
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Comments & Discussion',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.landscape,
+                                    size: 14,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      photo.location.category.isNotEmpty
+                                          ? photo.location.category
+                                          : 'Spot',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Comments stream
+                    Expanded(
+                      child: StreamBuilder<List<Comment>>(
+                        stream: firestoreService.streamComments(photo.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final comments = snapshot.data ?? [];
+                          if (comments.isEmpty) {
+                            return const Center(
+                              child: Text(
+                                'No comments yet. Leave a comment! 💬',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: comments.length,
+                            itemBuilder: (context, index) {
+                              return _CommentTile(
+                                photoId: photo.id,
+                                comment: comments[index],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    // Input
+                    ChatInputBar(
+                      hintText: 'Add a comment...',
+                      onSend: (text) => _addComment(context, text),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  /// The photo's height at full width, capped at 55% of the screen so the
+  /// chat keeps the rest. Re-evaluated as the keyboard opens and shrinks the
+  /// space, so the photo gives way to typing rather than the chat.
+  double _photoHeight(BoxConstraints constraints) {
+    final maxHeight = constraints.maxHeight * 0.55;
+    final natural = constraints.maxWidth / _safeAspect(photo.aspectRatio);
+    // A panorama would otherwise be a thin strip; give it a usable band.
+    final minHeight = maxHeight < 200 ? maxHeight : 200.0;
+    return natural.clamp(minHeight, maxHeight);
+  }
+}
+
+/// Width / height. Photos stored before aspect ratios were recorded, or with
+/// a bad value, fall back to square; BoxFit.contain keeps them uncropped.
+double _safeAspect(double ratio) => ratio.isFinite && ratio > 0 ? ratio : 1.0;
+
+/// Splits the web modal between photo and chat.
+///
+/// The photo panel takes the width the photo needs at full height, and the
+/// chat flexes between 340 and 460 around it, so the photo is shown whole
+/// without wide side bars; the modal shrinks to fit rather than padding a
+/// portrait with black. In a narrow window (this layout starts at 600px) the
+/// bounds give way, the chat never taking more than half, so the two panels
+/// always fit in [maxWidth].
+@visibleForTesting
+({double photoWidth, double chatWidth}) webModalSplit({
+  required double maxWidth,
+  required double height,
+  required double aspectRatio,
+}) {
+  const chatMin = 340.0, chatMax = 460.0;
+  // Under the photo: the user bar and the directions button.
+  const photoFooterHeight = 110.0;
+  // Below this the user bar's name, heart and menu start to crowd.
+  const photoMinWidth = 320.0;
+
+  final room = maxWidth - 1; // the divider
+  final photoNeeds = (height - photoFooterHeight) * _safeAspect(aspectRatio);
+  final chatWidth = math.min(
+    (room - photoNeeds).clamp(chatMin, chatMax),
+    room / 2,
+  );
+  final photoRoom = room - chatWidth;
+  final photoWidth = photoNeeds
+      .clamp(math.min(photoMinWidth, photoRoom), photoRoom)
+      .toDouble();
+  return (photoWidth: photoWidth, chatWidth: chatWidth);
 }
 
 // ── Web: Modal with photo left, comments right ────────
@@ -442,8 +501,15 @@ class _WebPictureModal extends StatelessWidget {
           builder: (context, constraints) {
             // Size the modal to the available window space (minus margin)
             // so it never gets clipped/overlapped when the browser is resized.
-            final width = (constraints.maxWidth * 0.85).clamp(360.0, 1400.0);
+            final maxWidth = (constraints.maxWidth * 0.85).clamp(360.0, 1400.0);
             final height = (constraints.maxHeight * 0.85).clamp(360.0, 820.0);
+
+            final (:photoWidth, :chatWidth) = webModalSplit(
+              maxWidth: maxWidth,
+              height: height,
+              aspectRatio: photo.aspectRatio,
+            );
+            final width = photoWidth + 1 + chatWidth; // 1: the divider
             return Container(
               width: width,
               height: height,
@@ -463,8 +529,8 @@ class _WebPictureModal extends StatelessWidget {
               child: Row(
                 children: [
                   // Left: Photo
-                  Expanded(
-                    flex: 5,
+                  SizedBox(
+                    width: photoWidth,
                     child: Column(
                       children: [
                         Expanded(
@@ -643,8 +709,8 @@ class _WebPictureModal extends StatelessWidget {
                   const VerticalDivider(width: 1),
 
                   // Right: Comments
-                  Expanded(
-                    flex: 3,
+                  SizedBox(
+                    width: chatWidth,
                     child: Column(
                       children: [
                         // Close button
