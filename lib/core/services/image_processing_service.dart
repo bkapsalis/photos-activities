@@ -3,6 +3,27 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import 'platform_image_encoder.dart';
+
+/// Resizes and JPEG-encodes, or returns null if it cannot.
+typedef PlatformEncoder =
+    Future<Uint8List?> Function(
+      Uint8List bytes, {
+      required int maxDimension,
+      required int quality,
+    });
+
+/// Thrown when a photo can be neither re-encoded nor stripped, so uploading
+/// it would publish its metadata. The message is shown to the person as is.
+class UnsupportedPhotoException implements Exception {
+  const UnsupportedPhotoException();
+
+  @override
+  String toString() =>
+      'This photo could not be processed, so it was not uploaded: its '
+      'location data could not be removed. Save it as a JPEG and try again.';
+}
+
 /// Prepares picked bytes for upload: smaller, and carrying no metadata.
 ///
 /// Two jobs that have to happen together. The photos in this project run to
@@ -11,8 +32,17 @@ import 'package:image/image.dart' as img;
 /// the GPS position. The file in Storage is world-readable, so the metadata
 /// has to come off before it goes up; the Firestore document is the only
 /// place location is meant to live.
+///
+/// Callers must read metadata off the original BEFORE calling this: nothing
+/// that comes out of here has any left to read.
 class ImageProcessingService {
-  const ImageProcessingService();
+  const ImageProcessingService({
+    this.platformEncoder = encodeWithPlatformCodec,
+  });
+
+  /// Tried first: the OS or browser codec. Injectable so tests can stand in
+  /// for a platform that `flutter test` does not have.
+  final PlatformEncoder platformEncoder;
 
   /// Longest edge of the uploaded image. 2048 keeps a photo sharp on a
   /// retina screen while cutting a 16MB original to a few hundred KB.
@@ -21,16 +51,31 @@ class ImageProcessingService {
 
   /// Returns bytes safe to upload: re-encoded, resized, and metadata-free.
   ///
-  /// Re-encoding alone does NOT drop the metadata — verified against a file
-  /// with known GPS: `image` carries the decoded EXIF on the Image object and
-  /// `encodeJpg` writes it straight back out, so a resized photo still had its
-  /// position. The EXIF is therefore cleared explicitly before encoding, and
-  /// the result is re-checked rather than assumed.
+  /// Three tiers, fastest first: the platform codec, then the pure-Dart
+  /// encoder, then a byte-wise strip of the original. Every tier's output is
+  /// scrubbed of metadata segments, because none of them is trusted to have
+  /// dropped it — `image`'s encodeJpg, for one, was verified to write the GPS
+  /// straight back out unless the EXIF is cleared first.
   ///
   /// If the image cannot be decoded at all, the original is scrubbed byte-wise
-  /// instead of uploaded intact, because the one outcome that must never
-  /// happen is publishing a file that still has GPS in it.
+  /// instead of uploaded intact — or, if it is not a JPEG and so cannot be
+  /// scrubbed, refused with [UnsupportedPhotoException] — because the one
+  /// outcome that must never happen is publishing a file that still has GPS
+  /// in it.
   Future<Uint8List> prepareForUpload(Uint8List original) async {
+    try {
+      final native = await platformEncoder(
+        original,
+        maxDimension: maxDimension,
+        quality: jpegQuality,
+      );
+      if (native != null && native.isNotEmpty) {
+        return stripMetadataSegments(native);
+      }
+    } catch (e) {
+      debugPrint('[image] platform encode threw, using Dart encoder: $e');
+    }
+
     try {
       final processed = kIsWeb
           // Web has no isolates; the encode blocks the frame, which is why
@@ -41,8 +86,16 @@ class ImageProcessingService {
     } catch (e) {
       debugPrint('[image] re-encode failed, falling back to strip: $e');
     }
+
+    // The byte-wise strip only understands JPEG; anything else would go up
+    // exactly as picked, GPS and all (a HEIC or PNG neither codec could
+    // read). Refusing the upload is the only safe answer for those.
+    if (!_isJpeg(original)) throw const UnsupportedPhotoException();
     return stripMetadataSegments(original);
   }
+
+  static bool _isJpeg(Uint8List bytes) =>
+      bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8;
 
   /// Decode, shrink if oversized, re-encode. Static so it can cross into an
   /// isolate.

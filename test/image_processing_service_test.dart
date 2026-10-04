@@ -85,8 +85,14 @@ void main() {
       final small = await fixture('no_exif.jpg');
       final out = await processing.prepareForUpload(small);
       final decoded = img.decodeImage(out)!;
-      expect(decoded.width, lessThanOrEqualTo(ImageProcessingService.maxDimension));
-      expect(decoded.height, lessThanOrEqualTo(ImageProcessingService.maxDimension));
+      expect(
+        decoded.width,
+        lessThanOrEqualTo(ImageProcessingService.maxDimension),
+      );
+      expect(
+        decoded.height,
+        lessThanOrEqualTo(ImageProcessingService.maxDimension),
+      );
     });
 
     test('shrinks an oversized image to the cap', () async {
@@ -110,6 +116,79 @@ void main() {
 
       final prepared = await processing.prepareForUpload(broken);
       expect((await metadata.extract(prepared)).hasLocation, isFalse);
+    });
+
+    test('an unreadable non-JPEG is refused, not uploaded raw', () async {
+      // A HEIC-style header neither codec can read. The JPEG strip cannot
+      // touch it, so returning it would publish whatever metadata it holds.
+      final heicLike = Uint8List.fromList([
+        0, 0, 0, 24, ...'ftypheic'.codeUnits, ...List.filled(64, 7),
+      ]);
+      final noPlatformCodec = ImageProcessingService(
+        platformEncoder: (bytes, {required maxDimension, required quality}) async =>
+            null,
+      );
+      await expectLater(
+        noPlatformCodec.prepareForUpload(heicLike),
+        throwsA(isA<UnsupportedPhotoException>()),
+      );
+    });
+  });
+
+  group('platform encoder tier', () {
+    test('its output is scrubbed even if the codec kept the GPS', () async {
+      // Stand-in for an OS codec that ignored keepExif: false and passed the
+      // original straight through. The upload must still carry no position.
+      final original = await fixture('gps_north_west.jpg');
+      final leaky = ImageProcessingService(
+        platformEncoder:
+            (bytes, {required maxDimension, required quality}) async => bytes,
+      );
+
+      final prepared = await leaky.prepareForUpload(original);
+      expect((await metadata.extract(prepared)).hasLocation, isFalse);
+      expect((await metadata.extract(prepared)).isEmpty, isTrue);
+    });
+
+    test('is passed the size cap and quality', () async {
+      int? seenMax;
+      int? seenQuality;
+      final spy = ImageProcessingService(
+        platformEncoder:
+            (bytes, {required maxDimension, required quality}) async {
+              seenMax = maxDimension;
+              seenQuality = quality;
+              return bytes;
+            },
+      );
+      await spy.prepareForUpload(await fixture('no_exif.jpg'));
+      expect(seenMax, ImageProcessingService.maxDimension);
+      expect(seenQuality, ImageProcessingService.jpegQuality);
+    });
+
+    test('a codec that gives up falls back to the Dart encoder', () async {
+      final unavailable = ImageProcessingService(
+        platformEncoder:
+            (bytes, {required maxDimension, required quality}) async => null,
+      );
+      final wide = img.Image(width: 5000, height: 2500);
+      final decoded = img.decodeImage(
+        await unavailable.prepareForUpload(
+          Uint8List.fromList(img.encodeJpg(wide)),
+        ),
+      )!;
+      expect(decoded.width, ImageProcessingService.maxDimension);
+    });
+
+    test('a codec that throws falls back without losing the strip', () async {
+      final original = await fixture('gps_north_west.jpg');
+      final broken = ImageProcessingService(
+        platformEncoder: (bytes, {required maxDimension, required quality}) =>
+            throw StateError('codec exploded'),
+      );
+      final prepared = await broken.prepareForUpload(original);
+      expect((await metadata.extract(prepared)).hasLocation, isFalse);
+      expect(img.decodeImage(prepared), isNotNull);
     });
   });
 }

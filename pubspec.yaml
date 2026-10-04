@@ -31,9 +31,15 @@ dependencies:
   # re-encode strips it.
   exif_reader: ^4.2.0
 
-  # Decode/resize/re-encode. Pure Dart so Android, iOS and web share one path.
-  # encodeJpg writes no EXIF, which is what strips location from the uploaded
-  # file rather than a separate scrubbing step that could be forgotten.
+  # Resize/re-encode with the OS codec on Android and iOS: several times
+  # faster than pure Dart, and decodes HEIC. Web uses the browser's canvas
+  # encoder via package:web instead.
+  flutter_image_compress: ^2.5.1
+  web: ^1.1.1
+
+  # Pure-Dart decode/resize/re-encode, the fallback when the platform codec
+  # fails. NB encodeJpg re-emits the decoded EXIF unless it is cleared, so
+  # ImageProcessingService clears it and scrubs every output regardless.
   image: ^4.10.1
 
   # Google Maps — needs an API key per platform, see MAP_SETUP.md
@@ -49,6 +55,10 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # On-device checks of the platform image codecs, which `flutter test`
+  # cannot reach. See integration_test/.
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
