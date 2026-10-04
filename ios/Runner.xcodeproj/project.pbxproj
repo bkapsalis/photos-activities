@@ -44,6 +44,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3514BEF2C2911A96584F461B /* Profile-prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Profile-prod.xcconfig; path = Flutter/Profile-prod.xcconfig; sourceTree = "<group>"; };
+		74E930A3B6B22E370D4A90B5 /* Release-prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release-prod.xcconfig; path = Flutter/Release-prod.xcconfig; sourceTree = "<group>"; };
+		80B733D65CA12B3B10A170CD /* Debug-prod.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug-prod.xcconfig; path = Flutter/Debug-prod.xcconfig; sourceTree = "<group>"; };
+		9695A29AED630BF9DDBDA812 /* Profile-staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Profile-staging.xcconfig; path = Flutter/Profile-staging.xcconfig; sourceTree = "<group>"; };
+		1EFF8CCBA77E95CD0E28CA8F /* Release-staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release-staging.xcconfig; path = Flutter/Release-staging.xcconfig; sourceTree = "<group>"; };
+		7CCD773267E7857074D3099C /* Debug-staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug-staging.xcconfig; path = Flutter/Debug-staging.xcconfig; sourceTree = "<group>"; };
+		27FACA99620DF45988192930 /* Profile-dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Profile-dev.xcconfig; path = Flutter/Profile-dev.xcconfig; sourceTree = "<group>"; };
+		52E4EA3BFCC7C545F570C46A /* Release-dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release-dev.xcconfig; path = Flutter/Release-dev.xcconfig; sourceTree = "<group>"; };
+		8EE2EC3F9DC600A5CB22B25E /* Debug-dev.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug-dev.xcconfig; path = Flutter/Debug-dev.xcconfig; sourceTree = "<group>"; };
 		011DA56C91995A3463EBC044 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		0650F8CB579C6A69EC72C549 /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "Runner/GoogleService-Info.plist"; sourceTree = "<group>"; };
 		0C149D36B507474258A6AEE0 /* Pods-RunnerTests.release-staging.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release-staging.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release-staging.xcconfig"; sourceTree = "<group>"; };
@@ -126,6 +135,15 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
+				3514BEF2C2911A96584F461B /* Profile-prod.xcconfig */,
+				74E930A3B6B22E370D4A90B5 /* Release-prod.xcconfig */,
+				80B733D65CA12B3B10A170CD /* Debug-prod.xcconfig */,
+				9695A29AED630BF9DDBDA812 /* Profile-staging.xcconfig */,
+				1EFF8CCBA77E95CD0E28CA8F /* Release-staging.xcconfig */,
+				7CCD773267E7857074D3099C /* Debug-staging.xcconfig */,
+				27FACA99620DF45988192930 /* Profile-dev.xcconfig */,
+				52E4EA3BFCC7C545F570C46A /* Release-dev.xcconfig */,
+				8EE2EC3F9DC600A5CB22B25E /* Debug-dev.xcconfig */,
 			);
 			name = Flutter;
 			sourceTree = "<group>";
@@ -480,7 +498,7 @@
 /* Begin XCBuildConfiguration section */
 		05835A20FBEF3C036C14D27E /* Release-staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C7953B2F390CCEBD22773749 /* Pods-Runner.release-staging.xcconfig */;
+			baseConfigurationReference = 1EFF8CCBA77E95CD0E28CA8F /* Release-staging.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -732,7 +750,7 @@
 		};
 		2A56A5BA0FDECACE86F49298 /* Profile-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4857CDA67073933F4E42494C /* Pods-Runner.profile-prod.xcconfig */;
+			baseConfigurationReference = 3514BEF2C2911A96584F461B /* Profile-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -918,7 +936,7 @@
 		};
 		49989823EAB2E153E6F6DBBF /* Debug-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 10BE2C86E4BB6274F76D6101 /* Pods-Runner.debug-dev.xcconfig */;
+			baseConfigurationReference = 8EE2EC3F9DC600A5CB22B25E /* Debug-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1033,7 +1051,7 @@
 		};
 		5D79AFB7346F179DB63167DC /* Release-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4E6393886DD4EAEB141568F1 /* Pods-Runner.release-prod.xcconfig */;
+			baseConfigurationReference = 74E930A3B6B22E370D4A90B5 /* Release-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1061,7 +1079,7 @@
 		};
 		63A0252EEEACE35FBD2E2BA7 /* Profile-staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = ADEB69F8792D881E754E8B22 /* Pods-Runner.profile-staging.xcconfig */;
+			baseConfigurationReference = 9695A29AED630BF9DDBDA812 /* Profile-staging.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1595,7 +1613,7 @@
 		};
 		C08CE40A39740258817C1E7D /* Release-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E1B6491DE5E9971BC2A047B4 /* Pods-Runner.release-dev.xcconfig */;
+			baseConfigurationReference = 52E4EA3BFCC7C545F570C46A /* Release-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1644,7 +1662,7 @@
 		};
 		D4A2562E9DD788E2298FB0F2 /* Debug-prod */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 3B024BD0F0A0202DDE8E3654 /* Pods-Runner.debug-prod.xcconfig */;
+			baseConfigurationReference = 80B733D65CA12B3B10A170CD /* Debug-prod.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1692,7 +1710,7 @@
 		};
 		E9705A9C57617BF27BD7F0C1 /* Debug-staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 901394A8B800B465FE3748AF /* Pods-Runner.debug-staging.xcconfig */;
+			baseConfigurationReference = 7CCD773267E7857074D3099C /* Debug-staging.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1740,7 +1758,7 @@
 		};
 		ED3CBA04889AE9589EC3DB53 /* Profile-dev */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = C4D5F60DD6CA866524235FFA /* Pods-Runner.profile-dev.xcconfig */;
+			baseConfigurationReference = 27FACA99620DF45988192930 /* Profile-dev.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

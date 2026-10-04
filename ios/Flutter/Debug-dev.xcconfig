@@ -1,0 +1,7 @@
+// Base configuration for the Debug-dev build of Runner.
+//
+// The flavor configurations must include Generated.xcconfig, or Xcode never
+// sees FLUTTER_TARGET and every flavor silently builds lib/main.dart (dev).
+#include? "Maps.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug-dev.xcconfig"
+#include "Generated.xcconfig"
