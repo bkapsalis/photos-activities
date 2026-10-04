@@ -69,23 +69,6 @@ class _SignInScreenState extends State<SignInScreen>
     }
   }
 
-  Future<void> _signInWithApple() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    final result = await _authService.signInWithApple();
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    if (result.isSuccess) {
-      widget.onSignedIn();
-    } else {
-      setState(() => _error = result.error);
-    }
-  }
-
   Future<void> _signInWithEmail() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       setState(() => _error = 'Please enter email and password.');
@@ -210,52 +193,38 @@ class _SignInScreenState extends State<SignInScreen>
                 ),
                 const SizedBox(height: 48),
 
-                // Google Sign-In button
-                OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                  icon: const Icon(Icons.g_mobiledata, size: 28),
-                  label: const Text('Continue with Google'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: BorderSide(color: AppColors.divider),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Apple Sign-In
-                FilledButton.icon(
-                  onPressed: _isLoading ? null : _signInWithApple,
-                  icon: const Icon(Icons.apple, size: 24),
-                  label: const Text('Continue with Apple'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Divider
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: AppColors.divider)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'or',
-                        style: TextStyle(color: AppColors.textSecondary),
+                if (AuthService.isGoogleSignInOffered) ...[
+                  // Google Sign-In button
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    label: const Text('Continue with Google'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      side: BorderSide(color: AppColors.divider),
                     ),
-                    Expanded(child: Divider(color: AppColors.divider)),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Divider
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: AppColors.divider)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'or',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: AppColors.divider)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // Email field
                 TextField(

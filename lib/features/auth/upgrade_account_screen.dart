@@ -149,50 +149,36 @@ class _UpgradeAccountScreenState extends State<UpgradeAccountScreen>
                 ),
                 const SizedBox(height: 32),
 
-                OutlinedButton.icon(
-                  onPressed: _isLoading
-                      ? null
-                      : () => _register(_authService.linkGuestWithGoogle),
-                  icon: const Icon(Icons.g_mobiledata, size: 28),
-                  label: const Text('Register with Google'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: BorderSide(color: AppColors.divider),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _isLoading
-                      ? null
-                      : () => _register(_authService.linkGuestWithApple),
-                  icon: const Icon(Icons.apple, size: 24),
-                  label: const Text('Register with Apple'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                if (AuthService.isGoogleSignInOffered) ...[
+                  OutlinedButton.icon(
+                    onPressed: _isLoading
+                        ? null
+                        : () => _register(_authService.linkGuestWithGoogle),
+                    icon: const Icon(Icons.g_mobiledata, size: 28),
+                    label: const Text('Register with Google'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: BorderSide(color: AppColors.divider),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: AppColors.divider)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('or',
-                          style: TextStyle(color: AppColors.textSecondary)),
-                    ),
-                    Expanded(child: Divider(color: AppColors.divider)),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: AppColors.divider)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('or',
+                            style: TextStyle(color: AppColors.textSecondary)),
+                      ),
+                      Expanded(child: Divider(color: AppColors.divider)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 TextField(
                   controller: _emailController,
