@@ -11,6 +11,7 @@ import '../../auth/upgrade_account_screen.dart';
 import '../../profile/profile_screen.dart';
 import '../../explore/explore_view.dart';
 import '../../map/photo_map_view.dart';
+import '../../../core/utils/permissions.dart';
 import 'delete_location_dialog.dart';
 import 'location_tab_bar.dart';
 import 'photo_card.dart';
@@ -280,13 +281,15 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                               tabs: tabs,
                               selectedLocation: activeLocation,
                               onLocationChanged: widget.onLocationChanged,
-                              onDeleteLocation: (name) =>
-                                  DeleteLocationDialog.show(
-                                    context,
-                                    category: currentCategory,
-                                    locationName: name,
-                                    photoCount: tabs.counts[name] ?? 0,
-                                  ),
+                              // Bulk delete spans other people's photos: moderators only.
+                              onDeleteLocation: !isAdmin()
+                                  ? null
+                                  : (name) => DeleteLocationDialog.show(
+                                      context,
+                                      category: currentCategory,
+                                      locationName: name,
+                                      photoCount: tabs.counts[name] ?? 0,
+                                    ),
                             ),
                             const SizedBox(height: 12),
                             Expanded(

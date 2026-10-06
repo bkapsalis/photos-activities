@@ -6,6 +6,7 @@ import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
 import '../../core/utils/directions.dart';
+import '../../core/utils/permissions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
@@ -207,77 +208,79 @@ class _MobilePictureChat extends StatelessWidget {
                       child: HeartCount(count: photo.heartCount),
                     ),
                     const SizedBox(width: 12),
-                    PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert,
-                        size: 20,
-                        color: AppColors.textSecondary,
-                      ),
-                      onSelected: (val) async {
-                        if (val == 'edit') {
-                          EditPhotoDialog.show(context, photo);
-                        } else if (val == 'delete') {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Delete Photo?'),
-                              content: const Text(
-                                'Are you sure you want to delete this photo post?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel'),
+                    // Only the owner or a moderator; firestore.rules refuse anyone else.
+                    if (canModify(photo.user.id))
+                      PopupMenuButton<String>(
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
+                        onSelected: (val) async {
+                          if (val == 'edit') {
+                            EditPhotoDialog.show(context, photo);
+                          } else if (val == 'delete') {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Delete Photo?'),
+                                content: const Text(
+                                  'Are you sure you want to delete this photo post?',
                                 ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancel'),
                                   ),
-                                  child: const Text('Delete'),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              // Image file and comments go with it; deleting only
+                              // the document would strand both.
+                              await PhotoDeletionService().deleteOne(
+                                photoId: photo.id,
+                                imageUrl: photo.imageUrl,
+                              );
+                              if (context.mounted) {
+                                (onClose ?? () => Navigator.pop(context))();
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Photo'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Delete Photo',
+                                  style: TextStyle(color: Colors.red),
                                 ),
                               ],
                             ),
-                          );
-                          if (confirm == true) {
-                            // Image file and comments go with it; deleting only
-                            // the document would strand both.
-                            await PhotoDeletionService().deleteOne(
-                              photoId: photo.id,
-                              imageUrl: photo.imageUrl,
-                            );
-                            if (context.mounted) {
-                              (onClose ?? () => Navigator.pop(context))();
-                            }
-                          }
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 18),
-                              SizedBox(width: 8),
-                              Text('Edit Photo'),
-                            ],
                           ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text(
-                                'Delete Photo',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -610,83 +613,85 @@ class _WebPictureModal extends StatelessWidget {
                                 child: HeartCount(count: photo.heartCount),
                               ),
                               const SizedBox(width: 12),
-                              PopupMenuButton<String>(
-                                icon: const Icon(
-                                  Icons.more_vert,
-                                  size: 20,
-                                  color: AppColors.textSecondary,
-                                ),
-                                onSelected: (val) async {
-                                  if (val == 'edit') {
-                                    EditPhotoDialog.show(context, photo);
-                                  } else if (val == 'delete') {
-                                    final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Delete Photo?'),
-                                        content: const Text(
-                                          'Are you sure you want to delete this photo post?',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('Cancel'),
+                              // Only the owner or a moderator; firestore.rules refuse anyone else.
+                              if (canModify(photo.user.id))
+                                PopupMenuButton<String>(
+                                  icon: const Icon(
+                                    Icons.more_vert,
+                                    size: 20,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  onSelected: (val) async {
+                                    if (val == 'edit') {
+                                      EditPhotoDialog.show(context, photo);
+                                    } else if (val == 'delete') {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text('Delete Photo?'),
+                                          content: const Text(
+                                            'Are you sure you want to delete this photo post?',
                                           ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: Colors.red,
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, false),
+                                              child: const Text('Cancel'),
                                             ),
-                                            child: const Text('Delete'),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx, true),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: Colors.red,
+                                              ),
+                                              child: const Text('Delete'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        // Image file and comments go with it.
+                                        await PhotoDeletionService().deleteOne(
+                                          photoId: photo.id,
+                                          imageUrl: photo.imageUrl,
+                                        );
+                                        if (context.mounted) {
+                                          (onClose ??
+                                              () => Navigator.pop(context))();
+                                        }
+                                      }
+                                    }
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Edit Photo'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.delete,
+                                            size: 18,
+                                            color: Colors.red,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Delete Photo',
+                                            style: TextStyle(color: Colors.red),
                                           ),
                                         ],
                                       ),
-                                    );
-                                    if (confirm == true) {
-                                      // Image file and comments go with it.
-                                      await PhotoDeletionService().deleteOne(
-                                        photoId: photo.id,
-                                        imageUrl: photo.imageUrl,
-                                      );
-                                      if (context.mounted) {
-                                        (onClose ??
-                                            () => Navigator.pop(context))();
-                                      }
-                                    }
-                                  }
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Edit Photo'),
-                                      ],
                                     ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.delete,
-                                          size: 18,
-                                          color: Colors.red,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'Delete Photo',
-                                          style: TextStyle(color: Colors.red),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),
@@ -861,7 +866,7 @@ class _CommentTile extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (comment.id.isNotEmpty)
+                    if (comment.id.isNotEmpty && canModify(comment.user.id))
                       PopupMenuButton<String>(
                         icon: const Icon(
                           Icons.more_horiz,

@@ -3,6 +3,7 @@ import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/photo_deletion_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/permissions.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import 'edit_photo_dialog.dart';
 
@@ -34,7 +35,9 @@ class PhotoCard extends StatelessWidget {
               child: LocationPill(locationName: photo.location.name),
             ),
 
-            // Edit / Delete Menu (top-right)
+            // Edit / Delete Menu (top-right), for the owner or a moderator
+            // only; firestore.rules refuse anyone else.
+            if (canModify(photo.user.id))
             Positioned(
               top: 6,
               right: 6,
