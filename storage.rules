@@ -2,10 +2,36 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Same moderators as firestore.rules; keep the two lists in sync.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', '') in ['bkapsalis@gmail.com'];
+    }
+
     // ── Photos ─────────────────────────────────────────
-    // Allow read and write for photos
+    // Uploads are tagged with their uploader's uid (customMetadata.ownerUid),
+    // which is the only link from a file back to a person: the file name is
+    // not the Firestore document id. Files uploaded before the tag existed
+    // carry none, so only a moderator can remove those.
     match /photos/{category}/{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
+
+      // Compressed uploads are a few hundred KB to ~2.5MB; the cap leaves
+      // room for the metadata-strip fallback, which keeps full size.
+      allow create: if request.auth != null
+        && request.resource.metadata.get('ownerUid', '') == request.auth.uid
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 25 * 1024 * 1024;
+
+      allow update: if isAdmin()
+        || (request.auth != null
+            && resource.metadata.get('ownerUid', '') == request.auth.uid
+            && request.resource.metadata.get('ownerUid', '') == request.auth.uid);
+
+      allow delete: if isAdmin()
+        || (request.auth != null
+            && resource.metadata.get('ownerUid', '') == request.auth.uid);
     }
   }
 }

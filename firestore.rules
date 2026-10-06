@@ -2,24 +2,90 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helpers ────────────────────────────────────────
+    // Guests count as signed in: they hold an anonymous Firebase account,
+    // and the app lets them post.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Moderators may edit or delete anything, including the location-tab
+    // bulk delete. Matched on a VERIFIED email: Google sign-in marks its
+    // email verified, while a password account someone registers with this
+    // address stays unverified and gains nothing. Keep in sync with
+    // storage.rules.
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', '') in ['bkapsalis@gmail.com'];
+    }
+
+    function ownedByCaller(data) {
+      return signedIn() && data.userId == request.auth.uid;
+    }
+
+    // A new document must name its author as the caller.
+    function createdAsSelf() {
+      return signedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // An owner may edit their own document but not give it away.
+    function ownerEditKeepsOwner() {
+      return ownedByCaller(resource.data)
+        && request.resource.data.userId == resource.data.userId;
+    }
+
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // Counters are bumped with FieldValue.increment; rules see the result.
+    function counterMovedBy(field, delta) {
+      return request.resource.data[field] == resource.data.get(field, 0) + delta;
+    }
+
     // ── Photos ─────────────────────────────────────────
     match /photos/{photoId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if createdAsSelf();
+      allow update: if isAdmin()
+        || ownerEditKeepsOwner()
+        // Anyone signed in can like a photo, one step at a time...
+        || (signedIn() && onlyChanges(['heartCount'])
+            && counterMovedBy('heartCount', 1))
+        // ...and adding or deleting a comment keeps the count in step.
+        || (signedIn() && onlyChanges(['commentCount'])
+            && (counterMovedBy('commentCount', 1)
+                || counterMovedBy('commentCount', -1)));
+      allow delete: if isAdmin() || ownedByCaller(resource.data);
     }
 
     // ── Locations ──────────────────────────────────────
+    // The app only reads these; nothing in it writes them.
     match /locations/{locationId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ── Chat Messages (Location Chat) ──────────────────
     match /chats/{locationId}/messages/{messageId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if createdAsSelf();
+      // Owner updates cover renaming a guest's messages after they register.
+      allow update: if isAdmin() || ownerEditKeepsOwner();
+      allow delete: if isAdmin() || ownedByCaller(resource.data);
     }
 
     // ── Comments (Picture Chat) ────────────────────────
     match /comments/{photoId}/messages/{commentId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if createdAsSelf();
+      allow update: if isAdmin() || ownerEditKeepsOwner();
+      // A photo's owner may clear its comments: deleting a photo removes its
+      // thread first, and that thread holds other people's comments.
+      allow delete: if isAdmin()
+        || ownedByCaller(resource.data)
+        || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
     }
 
     // ── Collection group over every "messages" subcollection ──

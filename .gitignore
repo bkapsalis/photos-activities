@@ -84,3 +84,6 @@ firestore-seed-backup-*/
 
 # Scratch file from an unrelated project
 /TEMP
+
+# Rules test dependencies (test/rules)
+node_modules/

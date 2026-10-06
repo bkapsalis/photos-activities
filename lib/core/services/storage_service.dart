@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'dart:ui' as ui;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -17,6 +18,17 @@ class PickedFileData {
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  /// Tags the file with its uploader. storage.rules require this tag to
+  /// match the caller on upload, and check it before letting anyone but a
+  /// moderator delete the file — nothing else ties a file to a person.
+  SettableMetadata _uploadMetadata() => SettableMetadata(
+    contentType: 'image/jpeg',
+    customMetadata: {
+      if (FirebaseAuth.instance.currentUser case final user?)
+        'ownerUid': user.uid,
+    },
+  );
+
   /// Upload a photo to Firebase Storage
   /// Returns the download URL on success, null on failure
   Future<String?> uploadPhoto({
@@ -31,7 +43,7 @@ class StorageService {
 
       final uploadTask = await ref.putFile(
         file,
-        SettableMetadata(contentType: 'image/jpeg'),
+        _uploadMetadata(),
       );
 
       if (uploadTask.state == TaskState.success) {
@@ -57,7 +69,7 @@ class StorageService {
 
       final uploadTask = await ref.putData(
         bytes,
-        SettableMetadata(contentType: 'image/jpeg'),
+        _uploadMetadata(),
       );
 
       if (uploadTask.state == TaskState.success) {
