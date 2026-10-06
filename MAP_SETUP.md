@@ -74,6 +74,15 @@ MAPS_API_KEY=your_key_here
 `maps.googleapis.com` script tag. This one *is* committed, which is why the
 HTTP-referrer restriction in step 3 matters.
 
+Run the web app on the port the key allows. `flutter run -d chrome` picks a
+random port, and the map then fails with `RefererNotAllowedMapError`:
+
+```
+flutter run -d chrome --web-port 5001 -t lib/main_dev.dart
+```
+
+The VS Code web launch configs already pass `--web-port 5001`.
+
 ## 5. Restart
 
 A full restart, not a hot reload — native config is read at launch.
