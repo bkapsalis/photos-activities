@@ -126,12 +126,25 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
     try {
       final photoId = DateTime.now().millisecondsSinceEpoch.toString();
 
+      // Needed before processing: the photographer's name is stamped on.
+      final currentUser = auth.FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        // Never attribute an upload to a placeholder account: a photo whose
+        // owner is fake cannot be edited, deleted or counted by whoever
+        // actually took it.
+        throw Exception('You must be signed in to upload a photo.');
+      }
+      final userProfile = UserProfile.fromFirebaseUser(currentUser);
+
       // Measure the original, then upload a resized copy with no metadata on
       // it. Only the Firestore document records where the photo was taken.
       final aspectRatio = await _storageService.getImageAspectRatio(
         _imageBytes!,
       );
-      final upload = await _imageProcessing.prepareForUpload(_imageBytes!);
+      final upload = await _imageProcessing.prepareForUpload(
+        _imageBytes!,
+        photographer: userProfile.name,
+      );
 
       final imageUrl = await _storageService.uploadBytes(
         bytes: upload,
@@ -143,14 +156,6 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
         throw Exception('Failed to upload image to Firebase Storage');
       }
 
-      final currentUser = auth.FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        // Never attribute an upload to a placeholder account: a photo whose
-        // owner is fake cannot be edited, deleted or counted by whoever
-        // actually took it.
-        throw Exception('You must be signed in to upload a photo.');
-      }
-      final userProfile = UserProfile.fromFirebaseUser(currentUser);
 
       final decoded = await decodeImageFromList(_imageBytes!);
       final metadata = _metadata.withFallbackSize(decoded.width, decoded.height);

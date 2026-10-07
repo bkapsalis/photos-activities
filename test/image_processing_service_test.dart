@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:bills_bay_area/core/services/image_processing_service.dart';
 import 'package:bills_bay_area/core/services/photo_metadata_service.dart';
+import 'package:bills_bay_area/core/services/watermark.dart';
 
 Future<Uint8List> fixture(String name) =>
     File('test/fixtures/$name').readAsBytes();
@@ -189,6 +190,115 @@ void main() {
       final prepared = await broken.prepareForUpload(original);
       expect((await metadata.extract(prepared)).hasLocation, isFalse);
       expect(img.decodeImage(prepared), isNotNull);
+    });
+  });
+
+  group('watermark', () {
+    // A flat grey photo: any stamp shows up as pixels that are no longer grey.
+    Uint8List greyPhoto(int w, int h) {
+      final photo = img.Image(width: w, height: h)
+        ..clear(img.ColorRgb8(128, 128, 128));
+      return Uint8List.fromList(img.encodeJpg(photo, quality: 95));
+    }
+
+    // Mean distance from flat grey over a region; JPEG noise stays near 0.
+    double inkIn(img.Image image, int x0, int y0, int x1, int y1) {
+      var total = 0.0;
+      var n = 0;
+      for (var y = y0; y < y1; y++) {
+        for (var x = x0; x < x1; x++) {
+          final p = image.getPixel(x, y);
+          total += (p.r - 128).abs() + (p.g - 128).abs() + (p.b - 128).abs();
+          n++;
+        }
+      }
+      return total / n;
+    }
+
+    // Stand-in for the OS codec: resizes and JPEG-encodes anything, PNG
+    // included, the way the real one does.
+    Future<Uint8List?> fakeCodec(
+      Uint8List bytes, {
+      required int maxDimension,
+      required int quality,
+    }) async {
+      var image = img.decodeImage(bytes)!;
+      final longest = image.width > image.height ? image.width : image.height;
+      if (longest > maxDimension) {
+        image = image.width >= image.height
+            ? img.copyResize(image, width: maxDimension)
+            : img.copyResize(image, height: maxDimension);
+      }
+      return Uint8List.fromList(img.encodeJpg(image, quality: quality));
+    }
+
+    test('text is the name with a copyright sign, or nothing', () {
+      expect(watermarkText('Bill Kapsalis'), '© Bill Kapsalis');
+      expect(watermarkText('  billpics234 '), '© billpics234');
+      expect(watermarkText('   '), isNull);
+    });
+
+    test('platform path stamps the bottom-right corner only', () async {
+      final service = ImageProcessingService(platformEncoder: fakeCodec);
+      final out = img.decodeJpg(
+        await service.prepareForUpload(
+          greyPhoto(1200, 900),
+          photographer: 'Bill Kapsalis',
+        ),
+      )!;
+      expect(out.width, 1200);
+      expect(inkIn(out, 600, 780, 1200, 900), greaterThan(3)); // the stamp
+      expect(inkIn(out, 0, 0, 400, 300), lessThan(2)); // untouched
+    });
+
+    test('no photographer, no stamp', () async {
+      final service = ImageProcessingService(platformEncoder: fakeCodec);
+      final out = img.decodeJpg(
+        await service.prepareForUpload(greyPhoto(1200, 900)),
+      )!;
+      expect(inkIn(out, 600, 780, 1200, 900), lessThan(2));
+    });
+
+    test('the Dart fallback stamps too', () async {
+      final noCodec = ImageProcessingService(
+        platformEncoder: (b, {required maxDimension, required quality}) async =>
+            null,
+      );
+      final out = img.decodeJpg(
+        await noCodec.prepareForUpload(
+          greyPhoto(1200, 900),
+          photographer: 'billpics234',
+        ),
+      )!;
+      expect(inkIn(out, 600, 780, 1200, 900), greaterThan(3));
+      expect(inkIn(out, 0, 0, 400, 300), lessThan(2));
+    });
+
+    test('a stamp that comes back as a non-JPEG is not uploaded as one', () async {
+      // A codec that sizes the photo but hands the stamped PNG back as is.
+      var calls = 0;
+      final service = ImageProcessingService(
+        platformEncoder: (b, {required maxDimension, required quality}) async {
+          calls++;
+          return calls == 1
+              ? fakeCodec(b, maxDimension: maxDimension, quality: quality)
+              : b;
+        },
+      );
+      final out = await service.prepareForUpload(
+        greyPhoto(800, 600),
+        photographer: 'Bill',
+      );
+      expect(out.sublist(0, 2), [0xFF, 0xD8]); // fell back to a real JPEG
+    });
+
+    test('stamping keeps the GPS out', () async {
+      final service = ImageProcessingService(platformEncoder: fakeCodec);
+      final out = await service.prepareForUpload(
+        await fixture('gps_north_west.jpg'),
+        photographer: 'Bill',
+      );
+      expect((await metadata.extract(out)).hasLocation, isFalse);
     });
   });
 }

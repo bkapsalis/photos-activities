@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'platform_image_encoder.dart';
+import 'watermark.dart';
 
 /// Resizes and JPEG-encodes, or returns null if it cannot.
 typedef PlatformEncoder =
@@ -35,6 +36,10 @@ class UnsupportedPhotoException implements Exception {
 ///
 /// Callers must read metadata off the original BEFORE calling this: nothing
 /// that comes out of here has any left to read.
+///
+/// When given a photographer's name, it is also stamped into the picture's
+/// bottom-right corner as a visible credit, so a copy taken from the app
+/// carries its source with it.
 class ImageProcessingService {
   const ImageProcessingService({
     this.platformEncoder = encodeWithPlatformCodec,
@@ -44,9 +49,10 @@ class ImageProcessingService {
   /// for a platform that `flutter test` does not have.
   final PlatformEncoder platformEncoder;
 
-  /// Longest edge of the uploaded image. 2048 keeps a photo sharp on a
-  /// retina screen while cutting a 16MB original to a few hundred KB.
-  static const maxDimension = 2048;
+  /// Longest edge of the uploaded image. 1600 still fills a phone or the
+  /// photo panel on a laptop sharply, while being too small to be worth
+  /// lifting for print or resale. (Was 2048.)
+  static const maxDimension = 1600;
   static const jpegQuality = 85;
 
   /// Returns bytes safe to upload: re-encoded, resized, and metadata-free.
@@ -57,12 +63,21 @@ class ImageProcessingService {
   /// dropped it — `image`'s encodeJpg, for one, was verified to write the GPS
   /// straight back out unless the EXIF is cleared first.
   ///
+  /// [photographer] is stamped on as "© name". The stamp is a deterrent, not
+  /// a privacy measure: if it cannot be drawn by one tier the next is tried,
+  /// and only the last resort, a byte-wise strip, goes up unstamped.
+  ///
   /// If the image cannot be decoded at all, the original is scrubbed byte-wise
   /// instead of uploaded intact — or, if it is not a JPEG and so cannot be
   /// scrubbed, refused with [UnsupportedPhotoException] — because the one
   /// outcome that must never happen is publishing a file that still has GPS
   /// in it.
-  Future<Uint8List> prepareForUpload(Uint8List original) async {
+  Future<Uint8List> prepareForUpload(
+    Uint8List original, {
+    String? photographer,
+  }) async {
+    final stamp = photographer == null ? null : watermarkText(photographer);
+
     try {
       final native = await platformEncoder(
         original,
@@ -70,18 +85,22 @@ class ImageProcessingService {
         quality: jpegQuality,
       );
       if (native != null && native.isNotEmpty) {
-        return stripMetadataSegments(native);
+        if (stamp == null) return stripMetadataSegments(native);
+        final stamped = await _stampAndReencode(native, stamp);
+        if (stamped != null) return stripMetadataSegments(stamped);
+        debugPrint('[image] stamp failed, using Dart encoder');
       }
     } catch (e) {
       debugPrint('[image] platform encode threw, using Dart encoder: $e');
     }
 
     try {
+      final job = (bytes: original, stamp: stamp);
       final processed = kIsWeb
           // Web has no isolates; the encode blocks the frame, which is why
           // the dimension cap matters more there than the quality setting.
-          ? _resizeAndEncode(original)
-          : await compute(_resizeAndEncode, original);
+          ? _resizeAndEncode(job)
+          : await compute(_resizeAndEncode, job);
       if (processed != null && processed.isNotEmpty) return processed;
     } catch (e) {
       debugPrint('[image] re-encode failed, falling back to strip: $e');
@@ -97,10 +116,30 @@ class ImageProcessingService {
   static bool _isJpeg(Uint8List bytes) =>
       bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8;
 
-  /// Decode, shrink if oversized, re-encode. Static so it can cross into an
-  /// isolate.
-  static Uint8List? _resizeAndEncode(Uint8List bytes) {
-    final decoded = img.decodeImage(bytes);
+  /// Draws the stamp on an already sized, upright JPEG, then has the platform
+  /// codec turn the PNG that dart:ui produces back into a JPEG. Null if any
+  /// step fails, or if what comes back is not a JPEG: the file is stored and
+  /// served as image/jpeg, and only a JPEG can be scrubbed.
+  Future<Uint8List?> _stampAndReencode(Uint8List jpeg, String stamp) async {
+    final png = await stampWithFlutter(jpeg, stamp);
+    if (png == null) return null;
+    try {
+      final out = await platformEncoder(
+        png,
+        maxDimension: maxDimension,
+        quality: jpegQuality,
+      );
+      return out != null && _isJpeg(out) ? out : null;
+    } catch (e) {
+      debugPrint('[image] re-encode after stamp failed: $e');
+      return null;
+    }
+  }
+
+  /// Decode, shrink if oversized, stamp, re-encode. Static so it can cross
+  /// into an isolate.
+  static Uint8List? _resizeAndEncode(({Uint8List bytes, String? stamp}) job) {
+    final decoded = img.decodeImage(job.bytes);
     if (decoded == null) return null;
 
     // bakeOrientation applies the EXIF rotation to the pixels, so the photo
@@ -127,6 +166,8 @@ class ImageProcessingService {
     // copyResize carries the container across, so clear it on the result too
     // rather than relying on which object the encoder happens to read.
     sized.exif = img.ExifData();
+
+    if (job.stamp != null) stampWithImagePackage(sized, job.stamp!);
 
     final encoded = img.encodeJpg(sized, quality: jpegQuality);
     // Belt and braces: if a future version of the encoder writes a segment

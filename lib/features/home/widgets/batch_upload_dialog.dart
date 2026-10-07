@@ -166,7 +166,10 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
         );
         decoded.dispose();
 
-        final upload = await _imageProcessing.prepareForUpload(img.bytes);
+        final upload = await _imageProcessing.prepareForUpload(
+          img.bytes,
+          photographer: userProfile.name,
+        );
         final imageUrl = await _storageService.uploadBytes(
           bytes: upload,
           category: _selectedCategory,

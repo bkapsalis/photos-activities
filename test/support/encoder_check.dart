@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 import 'exif_fixture.dart';
+import 'save_sample.dart';
 
 /// Exercises the REAL platform codec, which ordinary unit tests cannot reach:
 /// under `flutter test` on the VM it is unavailable and only the Dart
@@ -41,8 +42,9 @@ void defineEncoderCheck() {
       final out = img.decodeJpg(native)!;
       // Stored 4000x3000 + rotate 90 => upright portrait, long edge capped.
       expect(out.height, greaterThan(out.width), reason: 'not rotated');
-      expect(out.height, inInclusiveRange(2040, 2048));
-      expect(out.width, inInclusiveRange(1530, 1536));
+      const cap = ImageProcessingService.maxDimension;
+      expect(out.height, inInclusiveRange(cap - 8, cap));
+      expect(out.width, closeTo(cap * 3 / 4, 8));
 
       // And through the service, as uploads go.
       final prepared = await const ImageProcessingService().prepareForUpload(
@@ -50,6 +52,40 @@ void defineEncoderCheck() {
       );
       expect((await metadata.extract(prepared)).hasLocation, isFalse);
       expect((await metadata.extract(prepared)).isEmpty, isTrue);
+
+      // With the photographer's credit stamped on through the real codec.
+      sw.reset();
+      final stamped = await const ImageProcessingService().prepareForUpload(
+        original,
+        photographer: 'Bill Kapsalis',
+      );
+      final stampMs = sw.elapsedMilliseconds;
+      expect(stamped.sublist(0, 2), [0xFF, 0xD8]);
+      expect((await metadata.extract(stamped)).hasLocation, isFalse);
+      final a = img.decodeJpg(prepared)!, b = img.decodeJpg(stamped)!;
+      expect([b.width, b.height], [a.width, a.height]);
+      // The stamp changes the bottom-right corner and leaves the rest.
+      double diff(int x0, int y0, int x1, int y1) {
+        var t = 0.0, n = 0;
+        for (var y = y0; y < y1; y += 2) {
+          for (var x = x0; x < x1; x += 2) {
+            final p = a.getPixel(x, y), q = b.getPixel(x, y);
+            t += (p.r - q.r).abs() + (p.g - q.g).abs() + (p.b - q.b).abs();
+            n++;
+          }
+        }
+        return t / n;
+      }
+
+      final corner = diff(
+        b.width ~/ 2,
+        b.height - b.height ~/ 12,
+        b.width,
+        b.height,
+      );
+      final elsewhere = diff(0, 0, b.width ~/ 2, b.height ~/ 3);
+      expect(corner, greaterThan(elsewhere + 3), reason: 'no visible stamp');
+      final saved = saveSample('stamped_sample.jpg', stamped);
 
       // The old path, for comparison.
       sw.reset();
@@ -64,7 +100,10 @@ void defineEncoderCheck() {
         'in ${original.length ~/ 1024}KB -> '
         'platform ${native.length ~/ 1024}KB in ${nativeMs}ms '
         '(${out.width}x${out.height}); '
-        'dart ${dart.length ~/ 1024}KB in ${dartMs}ms',
+        'dart ${dart.length ~/ 1024}KB in ${dartMs}ms; '
+        'stamped ${stamped.length ~/ 1024}KB in ${stampMs}ms '
+        '(corner diff ${corner.toStringAsFixed(1)} vs '
+        '${elsewhere.toStringAsFixed(1)}) saved=$saved',
       );
     });
   });
