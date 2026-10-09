@@ -22,6 +22,8 @@ plugins {
     id("com.android.application") version "8.12.0" apply false
     // START: FlutterFire Configuration
     id("com.google.gms.google-services") version("4.4.4") apply false
+    // Uploads the mapping and native symbols Crashlytics needs to read reports.
+    id("com.google.firebase.crashlytics") version("3.0.8") apply false
     // END: FlutterFire Configuration
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }

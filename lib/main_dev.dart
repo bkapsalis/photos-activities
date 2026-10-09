@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options_dev.dart';
 import 'core/config/env_config.dart';
+import 'core/services/crash_reporting.dart';
 import 'app.dart';
 
 void main() async {
@@ -22,6 +23,8 @@ void main() async {
     // Firebase already initialized (e.g. during hot restart)
     // Just use the existing instance.
   }
+
+  await CrashReporting.install();
 
   runApp(const BillsBayAreaApp());
 }

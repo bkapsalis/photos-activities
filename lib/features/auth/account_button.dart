@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 
 import '../../core/models/models.dart';
+import '../../core/config/env_config.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/crash_reporting.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../profile/profile_screen.dart';
@@ -81,6 +83,19 @@ class AccountButton extends StatelessWidget {
                       style: TextStyle(fontSize: 11)),
                 ),
               ),
+            // Dev builds only: proves crash reports reach Crashlytics.
+            if (EnvConfig.instance.isDev && CrashReporting.supported)
+              const PopupMenuItem<String>(
+                value: 'testcrash',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.bug_report_outlined, size: 20),
+                  title: Text('Send test crash'),
+                  subtitle: Text('Dev only. Reopen the app to send it.',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ),
             const PopupMenuItem<String>(
               value: 'signout',
               child: ListTile(
@@ -123,6 +138,11 @@ class AccountButton extends StatelessWidget {
           ),
         );
       }
+      return;
+    }
+
+    if (value == 'testcrash') {
+      CrashReporting.testCrash();
       return;
     }
 
