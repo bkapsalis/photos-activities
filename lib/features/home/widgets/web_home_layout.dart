@@ -3,6 +3,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
 import '../../explore/explore_view.dart';
@@ -97,17 +98,29 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
             searchController: _searchController,
             onSearchChanged: (val) =>
                 setState(() => _searchQuery = val.trim().toLowerCase()),
-            onHomeTap: _resetToHome,
+            onHomeTap: () {
+              AnalyticsService.screen('home');
+              _resetToHome();
+            },
             view: _view,
-            onExploreTap: () => setState(
-              () => _view = _view == _WebView.explore
-                  ? _WebView.feed
-                  : _WebView.explore,
-            ),
-            onMapTap: () => setState(
-              () =>
-                  _view = _view == _WebView.map ? _WebView.feed : _WebView.map,
-            ),
+            onExploreTap: () {
+              setState(
+                () => _view = _view == _WebView.explore
+                    ? _WebView.feed
+                    : _WebView.explore,
+              );
+              AnalyticsService.screen(
+                _view == _WebView.explore ? 'explore' : 'home',
+              );
+            },
+            onMapTap: () {
+              setState(
+                () => _view = _view == _WebView.map
+                    ? _WebView.feed
+                    : _WebView.map,
+              );
+              AnalyticsService.screen(_view == _WebView.map ? 'map' : 'home');
+            },
           ),
           const Divider(height: 1),
 

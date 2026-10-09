@@ -53,6 +53,7 @@ class DefaultFirebaseOptions {
     projectId: 'photos-activities-staging',
     authDomain: 'photos-activities-staging.firebaseapp.com',
     storageBucket: 'photos-activities-staging.firebasestorage.app',
+    measurementId: 'G-4JX5T8NNE9',
   );
 
   static const FirebaseOptions android = FirebaseOptions(

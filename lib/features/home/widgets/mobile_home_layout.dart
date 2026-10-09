@@ -12,6 +12,7 @@ import '../../profile/profile_screen.dart';
 import '../../explore/explore_view.dart';
 import '../../map/photo_map_view.dart';
 import '../../../core/utils/permissions.dart';
+import '../../../core/services/analytics_service.dart';
 import 'delete_location_dialog.dart';
 import 'location_tab_bar.dart';
 import 'photo_card.dart';
@@ -334,6 +335,9 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _navIndex,
         onDestinationSelected: (index) {
+          AnalyticsService.screen(
+            const ['home', 'explore', 'map', 'profile'][index],
+          );
           switch (index) {
             case 0:
               _resetToHome();

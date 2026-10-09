@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
+import '../../core/services/analytics_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
 import '../../core/utils/directions.dart';
@@ -974,6 +975,7 @@ class _DirectionsButtonState extends State<DirectionsButton> {
   bool _opening = false;
 
   Future<void> _go() async {
+    AnalyticsService.directionsRequested(widget.photo.location.name);
     setState(() => _opening = true);
     final error = await Directions.toLocation(widget.photo.location);
     if (!mounted) return;

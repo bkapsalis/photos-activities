@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
+import 'analytics_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -93,6 +94,10 @@ class FirestoreService {
   Future<String?> addPhoto(PhotoPost photo) async {
     try {
       final docRef = await _photosRef.add(photo.toFirestore());
+      AnalyticsService.photoUploaded(
+        category: photo.category,
+        hasLocation: photo.location.hasCoordinates,
+      );
       return docRef.id;
     } catch (e) {
       print('Error adding photo: $e');
@@ -189,6 +194,7 @@ class FirestoreService {
   /// Add a comment to a photo
   Future<void> addComment(String photoId, Comment comment) async {
     await _commentsRef(photoId).add(comment.toFirestore());
+    AnalyticsService.commentPosted(photoId);
     // Also increment comment count on the photo
     await _photosRef.doc(photoId).update({
       'commentCount': FieldValue.increment(1),

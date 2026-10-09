@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/env_config.dart';
+import 'core/services/analytics_service.dart';
 import 'features/home/home_screen.dart';
 import 'features/location_chat/location_chat_screen.dart';
 import 'features/picture_chat/picture_chat_screen.dart';
@@ -63,6 +64,7 @@ class _AppShell extends StatefulWidget {
 
 class _AppShellState extends State<_AppShell> {
   void _openLocationChat(String locationId) {
+    AnalyticsService.screen('location_chat');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LocationChatScreen(
@@ -74,6 +76,8 @@ class _AppShellState extends State<_AppShell> {
   }
 
   void _openPictureChat(String photoId) {
+    AnalyticsService.screen('photo');
+    AnalyticsService.photoViewed(photoId);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PictureChatScreen(

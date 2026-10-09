@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/env_config.dart';
 import '../models/models.dart';
+import 'analytics_service.dart';
 
 /// Outcome of an auth call, carrying a human-readable reason on failure.
 class AuthResult {
@@ -70,6 +71,7 @@ class AuthService {
           ..addScope('email')
           ..addScope('profile');
         final result = await _auth.signInWithPopup(provider);
+        AnalyticsService.login('google');
         return AuthResult.success(result.user);
       } on FirebaseAuthException catch (e) {
         debugPrint('[auth] popup FirebaseAuthException code=${e.code} '
@@ -97,6 +99,7 @@ class AuthService {
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       final result = await _auth.signInWithCredential(credential);
+      AnalyticsService.login('google');
       return AuthResult.success(result.user);
     } on GoogleSignInException catch (e) {
       debugPrint('[auth] GoogleSignInException code=${e.code} '
@@ -167,6 +170,7 @@ class AuthService {
       final credential = kIsWeb
           ? await _auth.signInWithPopup(provider)
           : await _auth.signInWithProvider(provider);
+      AnalyticsService.login('apple');
       return AuthResult.success(credential.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_appleErrorMessage(e));
@@ -194,6 +198,7 @@ class AuthService {
         await user.linkWithProvider(provider);
       }
       await _auth.currentUser?.reload();
+      AnalyticsService.signUp('apple');
       return AuthResult.success(_auth.currentUser);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_linkErrorMessage(e));
@@ -230,6 +235,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      AnalyticsService.login('email');
       return AuthResult.success(result.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_emailSignInErrorMessage(e));
@@ -275,6 +281,7 @@ class AuthService {
         email: email,
         password: password,
       );
+      AnalyticsService.signUp('email');
       return AuthResult.success(result.user);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_createAccountErrorMessage(e));
@@ -316,6 +323,7 @@ class AuthService {
   Future<AuthResult> signInAsGuest() async {
     try {
       final credential = await _auth.signInAnonymously();
+      AnalyticsService.login('guest');
       return AuthResult.success(credential.user);
     } on FirebaseAuthException catch (e) {
       // Firebase reports a disabled Anonymous provider as
@@ -356,6 +364,7 @@ class AuthService {
       final result = await user.linkWithCredential(credential);
       await result.user?.updateDisplayName(email.split('@').first);
       await _auth.currentUser?.reload();
+      AnalyticsService.signUp('email');
       return AuthResult.success(_auth.currentUser);
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_linkErrorMessage(e));
@@ -381,6 +390,7 @@ class AuthService {
           ..addScope('profile');
         await user.linkWithPopup(provider);
         await _auth.currentUser?.reload();
+        AnalyticsService.signUp('google');
         return AuthResult.success(_auth.currentUser);
       } on FirebaseAuthException catch (e) {
         return AuthResult.failure(
@@ -402,6 +412,7 @@ class AuthService {
       );
       await user.linkWithCredential(credential);
       await _auth.currentUser?.reload();
+      AnalyticsService.signUp('google');
       return AuthResult.success(_auth.currentUser);
     } on GoogleSignInException catch (e) {
       debugPrint('[auth] GoogleSignInException code=${e.code} '

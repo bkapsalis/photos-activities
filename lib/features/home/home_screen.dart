@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/widgets/shared_widgets.dart';
+import '../../core/data/mock_data.dart';
+import '../../core/services/analytics_service.dart';
 import 'widgets/mobile_home_layout.dart';
 import 'widgets/web_home_layout.dart';
 
@@ -20,6 +22,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedLocation;
 
   void _onCategoryChanged(int index) {
+    if (index >= 0 && index < categories.length) {
+      AnalyticsService.categorySelected(categories[index]);
+    }
     setState(() {
       _selectedCategoryIndex = index;
       // Location tabs belong to a category, so start the new one on "All".
@@ -28,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onLocationChanged(String? location) {
+    AnalyticsService.locationSelected(location);
     setState(() => _selectedLocation = location);
   }
 
