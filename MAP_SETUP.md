@@ -45,9 +45,10 @@ On the key's page, under **Application restrictions**:
   with your debug SHA-1:
   `B1:48:63:E5:5A:EE:20:75:78:87:10:C0:AB:FC:61:6F:DF:8B:D9:DE`
   (Add the staging/prod package names and your release SHA-1 later.)
-- **iOS** — iOS apps → add bundle ID `com.billsbayarea.billsBayArea`
-  (note: *not* `com.billsbayarea.app.dev` — that is the Android package name.
-  Every iOS flavour currently shares this one bundle ID.)
+- **iOS** — iOS apps → add the bundle ID of each flavour you run:
+  `com.billsbayarea.app.dev`, `com.billsbayarea.app.staging` and
+  `com.billsbayarea.app` (the same names as the Android packages; until
+  October 2026 every iOS flavour shared `com.billsbayarea.billsBayArea`).
 - **Web** — Websites → add `http://localhost:5001/*` for development, plus
   your real domain before you ship.
 
