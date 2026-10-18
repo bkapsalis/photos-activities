@@ -140,8 +140,10 @@ class _LocationTabBarState extends State<LocationTabBar>
       indicatorWeight: 3,
       dividerColor: AppColors.divider,
       labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      unselectedLabelStyle:
-          const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      unselectedLabelStyle: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
       tabs: [
         // "All" never offers a delete: it would mean every photo in the
         // category, which is not what a per-location control should do.

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
@@ -13,11 +12,15 @@ import '../../../core/widgets/shared_widgets.dart';
 import '../../auth/account_button.dart';
 import '../../auth/upgrade_account_screen.dart';
 import '../../../core/utils/permissions.dart';
+import '../../../core/services/view_mode_service.dart';
 import 'delete_location_dialog.dart';
 import 'location_tab_bar.dart';
-import 'photo_card.dart';
+import 'map_toggle.dart';
+import 'photo_feed_view.dart';
+import 'photo_masonry_grid.dart';
 import 'batch_upload_dialog.dart';
 import 'upload_photo_dialog.dart';
+import 'view_mode_toggle_button.dart';
 
 /// Which of the three web views is showing.
 enum _WebView { feed, explore, map }
@@ -27,6 +30,16 @@ class WebHomeLayout extends StatefulWidget {
   final ValueChanged<int> onCategoryChanged;
   final String? selectedLocation;
   final ValueChanged<String?> onLocationChanged;
+  final PhotoViewMode viewMode;
+  final VoidCallback onViewModeToggled;
+
+  /// Changes whenever another page asks for a particular location tab (see
+  /// FeedNavigator). The tab itself arrives in [selectedCategoryIndex] and
+  /// [selectedLocation]; this is the cue to show the plain feed for it.
+  final int showFeedRequests;
+
+  /// The photo the carousel should centre on for that request.
+  final String? focusPhotoId;
   final Function(String photoId)? onPhotoTap;
   final Function(String locationId)? onChatTap;
 
@@ -36,6 +49,10 @@ class WebHomeLayout extends StatefulWidget {
     required this.onCategoryChanged,
     required this.selectedLocation,
     required this.onLocationChanged,
+    required this.viewMode,
+    required this.onViewModeToggled,
+    this.showFeedRequests = 0,
+    this.focusPhotoId,
     this.onPhotoTap,
     this.onChatTap,
   });
@@ -56,6 +73,36 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
   /// two can never be switched on at the same time.
   _WebView _view = _WebView.feed;
 
+  /// Set while the map is showing: where a second click on Map goes back to.
+  MapReturnPoint<_WebView>? _mapReturn;
+
+  @override
+  void didUpdateWidget(WebHomeLayout old) {
+    super.didUpdateWidget(old);
+    if (widget.showFeedRequests != old.showFeedRequests) _showRequestedFeed();
+  }
+
+  /// Shows the location tab another page asked for: out of Explore or the
+  /// map and back to the feed, with nothing hiding its photos. Like the Home
+  /// reset, except the requested tab is kept rather than set back to "All".
+  void _showRequestedFeed() {
+    _view = _WebView.feed;
+    _mapReturn = null;
+    _searchQuery = '';
+    _searchController.clear();
+    // With a photo to return to, the grid scrolls to it; otherwise the top.
+    _gridFocusPending = widget.focusPhotoId != null;
+    if (!_gridFocusPending) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_feedScrollController.hasClients) _feedScrollController.jumpTo(0);
+      });
+    }
+  }
+
+  /// Set by a request that names a photo; cleared once the grid has scrolled
+  /// to it, so later rebuilds leave the reader's scroll position alone.
+  bool _gridFocusPending = false;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -68,6 +115,7 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
   void _resetToHome() {
     setState(() {
       _view = _WebView.feed;
+      _mapReturn = null;
       _searchQuery = '';
       _searchController.clear();
     });
@@ -81,10 +129,54 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
     }
   }
 
+  void _openMap() {
+    setState(() {
+      _mapReturn = MapReturnPoint(
+        view: _view,
+        categoryIndex: widget.selectedCategoryIndex,
+        location: widget.selectedLocation,
+        search: _searchController.text,
+      );
+      _view = _WebView.map;
+    });
+  }
+
+  /// The second click on Map: back to the view, category, location tab and
+  /// search the map was opened from, as on mobile.
+  void _leaveMap() {
+    final back = _mapReturn;
+    if (back == null) return _resetToHome();
+    setState(() {
+      _view = back.view;
+      _mapReturn = null;
+      _searchController.text = back.search;
+      _searchQuery = back.search.trim().toLowerCase();
+    });
+    if (widget.selectedCategoryIndex != back.categoryIndex) {
+      widget.onCategoryChanged(back.categoryIndex);
+    }
+    if (widget.selectedLocation != back.location) {
+      widget.onLocationChanged(back.location);
+    }
+  }
+
+  /// A different location tab starts at its top; the grid is kept between
+  /// tabs, scroll position and all.
+  void _changeLocation(String? location) {
+    widget.onLocationChanged(location);
+    if (_feedScrollController.hasClients) _feedScrollController.jumpTo(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentCategory = categories[widget.selectedCategoryIndex];
     final firestoreService = FirestoreService();
+
+    // Hidden views kept alive under the map; only the one it was opened from.
+    final mapFrom = _view == _WebView.map ? _mapReturn?.view : null;
+    final keepExplore =
+        _view == _WebView.explore || mapFrom == _WebView.explore;
+    final keepFeed = _view == _WebView.feed || mapFrom == _WebView.feed;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -103,23 +195,26 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
               _resetToHome();
             },
             view: _view,
+            viewMode: widget.viewMode,
+            onViewModeToggled: widget.onViewModeToggled,
             onExploreTap: () {
-              setState(
-                () => _view = _view == _WebView.explore
+              setState(() {
+                _view = _view == _WebView.explore
                     ? _WebView.feed
-                    : _WebView.explore,
-              );
+                    : _WebView.explore;
+                _mapReturn = null;
+              });
               AnalyticsService.screen(
                 _view == _WebView.explore ? 'explore' : 'home',
               );
             },
             onMapTap: () {
-              setState(
-                () => _view = _view == _WebView.map
-                    ? _WebView.feed
-                    : _WebView.map,
-              );
-              AnalyticsService.screen(_view == _WebView.map ? 'map' : 'home');
+              _view == _WebView.map ? _leaveMap() : _openMap();
+              AnalyticsService.screen(switch (_view) {
+                _WebView.map => 'map',
+                _WebView.explore => 'explore',
+                _WebView.feed => 'home',
+              });
             },
           ),
           const Divider(height: 1),
@@ -130,91 +225,108 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
           // Body: Explore, or the usual Sidebar + Grid.
           // Explore spans every category, so the category-scoped sidebar is
           // replaced rather than kept alongside it.
-          if (_view == _WebView.explore)
-            Expanded(child: ExploreView(onPhotoTap: widget.onPhotoTap))
-          else
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left sidebar — location list with chat access
-                  _WebSidebar(
-                    selectedCategory: currentCategory,
-                    firestoreService: firestoreService,
-                    onChatTap: widget.onChatTap,
-                  ),
-                  const VerticalDivider(width: 1),
-
-                  // Main photo grid
-                  Expanded(
-                    child: StreamBuilder<List<PhotoPost>>(
-                      stream: firestoreService.streamPhotosByCategory(
-                        currentCategory,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-
-                        final categoryPhotos = snapshot.data ?? [];
-
-                        // Tabs are built from every photo in the category so the
-                        // strip stays stable while searching inside one location.
-                        final tabs = LocationTabs.fromPhotos(categoryPhotos);
-                        final activeLocation = tabs.resolve(
-                          widget.selectedLocation,
-                        );
-
-                        var photos = activeLocation == null
-                            ? categoryPhotos
-                            : categoryPhotos
-                                  .where(
-                                    (p) =>
-                                        p.location.name.trim() ==
-                                        activeLocation,
-                                  )
-                                  .toList();
-
-                        // Apply search filter
-                        if (_searchQuery.isNotEmpty) {
-                          photos = photos
-                              .where(
-                                (p) =>
-                                    p.location.name.toLowerCase().contains(
-                                      _searchQuery,
-                                    ) ||
-                                    (p.location.region?.toLowerCase().contains(
-                                          _searchQuery,
-                                        ) ??
-                                        false),
-                              )
-                              .toList();
-                        }
-
-                        // Most-liked first, within whichever tab is showing.
-                        photos = photos.sortedByPopularity();
-
-                        return _WebPhotoGrid(
-                          category: currentCategory,
-                          photos: photos,
-                          searchQuery: _searchQuery,
-                          tabs: tabs,
-                          activeLocation: activeLocation,
-                          onLocationChanged: widget.onLocationChanged,
-                          onPhotoTap: widget.onPhotoTap,
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_view != _WebView.explore)
+                  KeyedSubtree(
+                    key: const ValueKey('feed'),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left sidebar — location list with chat access
+                        _WebSidebar(
+                          selectedCategory: currentCategory,
+                          firestoreService: firestoreService,
                           onChatTap: widget.onChatTap,
-                          scrollController: _feedScrollController,
-                          showMap: _view == _WebView.map,
-                        );
-                      },
+                        ),
+                        const VerticalDivider(width: 1),
+
+                        // Main photo grid
+                        Expanded(
+                          child: CategoryPhotosBuilder(
+                            category: currentCategory,
+                            builder: (context, categoryPhotos) {
+                              // Tabs are built from every photo in the category so the
+                              // strip stays stable while searching inside one location.
+                              final tabs = LocationTabs.fromPhotos(
+                                categoryPhotos,
+                              );
+                              final activeLocation = tabs.resolve(
+                                widget.selectedLocation,
+                              );
+
+                              var photos = activeLocation == null
+                                  ? categoryPhotos
+                                  : categoryPhotos
+                                        .where(
+                                          (p) =>
+                                              p.location.name.trim() ==
+                                              activeLocation,
+                                        )
+                                        .toList();
+
+                              // Apply search filter
+                              if (_searchQuery.isNotEmpty) {
+                                photos = photos
+                                    .where(
+                                      (p) =>
+                                          p.location.name
+                                              .toLowerCase()
+                                              .contains(_searchQuery) ||
+                                          (p.location.region
+                                                  ?.toLowerCase()
+                                                  .contains(_searchQuery) ??
+                                              false),
+                                    )
+                                    .toList();
+                              }
+
+                              // Most-liked first, within whichever tab is showing.
+                              photos = photos.sortedByPopularity();
+
+                              return _WebPhotoGrid(
+                                category: currentCategory,
+                                photos: photos,
+                                searchQuery: _searchQuery,
+                                tabs: tabs,
+                                activeLocation: activeLocation,
+                                onLocationChanged: _changeLocation,
+                                onPhotoTap: widget.onPhotoTap,
+                                onChatTap: widget.onChatTap,
+                                scrollController: _feedScrollController,
+                                showMap: _view == _WebView.map,
+                                keepFeed: keepFeed,
+                                viewMode: widget.viewMode,
+                                focusPhotoId: widget.focusPhotoId,
+                                showFeedRequests: widget.showFeedRequests,
+                                gridFocusPhotoId: _gridFocusPending
+                                    ? widget.focusPhotoId
+                                    : null,
+                                onGridFocusDone: () =>
+                                    _gridFocusPending = false,
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                if (keepExplore)
+                  KeyedSubtree(
+                    key: const ValueKey('explore'),
+                    child: Offstage(
+                      offstage: _view != _WebView.explore,
+                      child: TickerMode(
+                        enabled: _view == _WebView.explore,
+                        child: ExploreView(onPhotoTap: widget.onPhotoTap),
+                      ),
+                    ),
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -236,6 +348,10 @@ class _WebTopNav extends StatelessWidget {
   final VoidCallback onExploreTap;
   final VoidCallback onMapTap;
 
+  /// Grid or carousel for the photo feed.
+  final PhotoViewMode viewMode;
+  final VoidCallback onViewModeToggled;
+
   const _WebTopNav({
     required this.selectedCategoryIndex,
     required this.onCategoryChanged,
@@ -246,6 +362,8 @@ class _WebTopNav extends StatelessWidget {
     required this.view,
     required this.onExploreTap,
     required this.onMapTap,
+    required this.viewMode,
+    required this.onViewModeToggled,
   });
 
   @override
@@ -349,6 +467,13 @@ class _WebTopNav extends StatelessWidget {
               tooltip: view == _WebView.map ? 'Back to all photos' : 'Map',
               onPressed: onMapTap,
             ),
+            // Grid/carousel only means something while the feed is showing.
+            if (view == _WebView.feed)
+              ViewModeToggleButton(
+                mode: viewMode,
+                onPressed: onViewModeToggled,
+                iconSize: 22,
+              ),
             const SizedBox(width: 8),
 
             // Search
@@ -594,6 +719,20 @@ class _WebPhotoGrid extends StatelessWidget {
   /// arrangement the mobile Map tab uses.
   final bool showMap;
 
+  /// Keep the photos alive, hidden, under the map; see [FeedUnderMap].
+  final bool keepFeed;
+
+  /// Grid or carousel, when the photos are not on the map.
+  final PhotoViewMode viewMode;
+
+  /// The photo the carousel should centre on, and the request it came with.
+  final String? focusPhotoId;
+  final int showFeedRequests;
+
+  /// The photo the grid should scroll to, once; see PhotoMasonryGrid.
+  final String? gridFocusPhotoId;
+  final VoidCallback? onGridFocusDone;
+
   const _WebPhotoGrid({
     required this.category,
     required this.photos,
@@ -605,6 +744,12 @@ class _WebPhotoGrid extends StatelessWidget {
     this.onChatTap,
     this.scrollController,
     this.showMap = false,
+    this.keepFeed = true,
+    this.viewMode = PhotoViewMode.masonry,
+    this.focusPhotoId,
+    this.showFeedRequests = 0,
+    this.gridFocusPhotoId,
+    this.onGridFocusDone,
   });
 
   IconData get _categoryIcon {
@@ -677,74 +822,75 @@ class _WebPhotoGrid extends StatelessWidget {
         const SizedBox(height: 20),
 
         // Content area
-        if (showMap)
-          Expanded(
-            child: PhotoMapView(photos: photos, onPhotoTap: onPhotoTap),
-          )
-        else if (photos.isEmpty)
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    searchQuery.isNotEmpty
-                        ? Icons.search_off
-                        : Icons.add_a_photo,
-                    size: 64,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    searchQuery.isNotEmpty
-                        ? 'No photos match "$searchQuery"'
-                        : 'No photos yet in ${activeLocation ?? category}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+        Expanded(
+          child: FeedUnderMap(
+            showMap: showMap,
+            keepFeed: keepFeed,
+            map: PhotoMapView(photos: photos, onPhotoTap: onPhotoTap),
+            feed: photos.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          searchQuery.isNotEmpty
+                              ? Icons.search_off
+                              : Icons.add_a_photo,
+                          size: 64,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          searchQuery.isNotEmpty
+                              ? 'No photos match "$searchQuery"'
+                              : 'No photos yet in ${activeLocation ?? category}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (searchQuery.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Upload your first photo using the buttons above!',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                : PhotoFeedView(
+                    mode: viewMode,
+                    focusPhotoId: focusPhotoId,
+                    focusRequest: showFeedRequests,
+                    photos: photos,
+                    onPhotoTap: onPhotoTap,
+                    horizontalPadding: 24,
+                    masonry: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final crossAxisCount = constraints.maxWidth > 1200
+                            ? 5
+                            : constraints.maxWidth > 900
+                            ? 4
+                            : constraints.maxWidth > 600
+                            ? 3
+                            : 2;
+                        return PhotoMasonryGrid(
+                          photos: photos,
+                          onPhotoTap: onPhotoTap,
+                          controller: scrollController!,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          crossAxisCount: crossAxisCount,
+                          spacing: 16,
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                          focusPhotoId: gridFocusPhotoId,
+                          onFocusDone: onGridFocusDone,
+                        );
+                      },
                     ),
                   ),
-                  if (searchQuery.isEmpty) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Upload your first photo using the buttons above!',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          )
-        else
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth > 1200
-                    ? 5
-                    : constraints.maxWidth > 900
-                    ? 4
-                    : constraints.maxWidth > 600
-                    ? 3
-                    : 2;
-                return MasonryGridView.count(
-                  controller: scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  itemCount: photos.length,
-                  itemBuilder: (context, index) {
-                    final photo = photos[index];
-                    return PhotoCard(
-                      photo: photo,
-                      onTap: () => onPhotoTap?.call(photo.id),
-                    );
-                  },
-                );
-              },
-            ),
           ),
+        ),
       ],
     );
   }

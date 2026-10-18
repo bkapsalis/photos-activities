@@ -63,6 +63,7 @@ void main() {
       required LocationTabs tabs,
       String? selected,
       required ValueChanged<String?> onChanged,
+      ValueChanged<String>? onDelete,
     }) {
       return MaterialApp(
         home: Scaffold(
@@ -70,6 +71,7 @@ void main() {
             tabs: tabs,
             selectedLocation: selected,
             onLocationChanged: onChanged,
+            onDeleteLocation: onDelete,
           ),
         ),
       );
@@ -160,6 +162,102 @@ void main() {
       );
 
       expect(find.byType(TabBar), findsNothing);
+    });
+  });
+
+  group('LocationTabBar delete button', () {
+    Widget harness({
+      required LocationTabs tabs,
+      String? selected,
+      ValueChanged<String?>? onChanged,
+      ValueChanged<String>? onDelete,
+    }) {
+      return MaterialApp(
+        home: Scaffold(
+          body: LocationTabBar(
+            tabs: tabs,
+            selectedLocation: selected,
+            onLocationChanged: onChanged ?? (_) {},
+            onDeleteLocation: onDelete,
+          ),
+        ),
+      );
+    }
+
+    testWidgets('hidden on every tab when onDeleteLocation is null (non-admin)',
+        (tester) async {
+      final tabs = LocationTabs.fromPhotos([
+        _photo('1', 'Vasona Lake'),
+        _photo('2', 'Bay Area Hiking'),
+      ]);
+
+      await tester.pumpWidget(
+        harness(tabs: tabs, selected: 'Vasona Lake', onDelete: null),
+      );
+
+      expect(find.byIcon(Icons.delete_outline), findsNothing);
+    });
+
+    testWidgets('shown only on the selected tab, not on others or All',
+        (tester) async {
+      final tabs = LocationTabs.fromPhotos([
+        _photo('1', 'Vasona Lake'),
+        _photo('2', 'Bay Area Hiking'),
+      ]);
+
+      await tester.pumpWidget(
+        harness(tabs: tabs, selected: 'Vasona Lake', onDelete: (_) {}),
+      );
+
+      // One delete icon total: the selected "Vasona Lake" tab's, not
+      // "Bay Area Hiking"'s and not "All"'s.
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
+    testWidgets('moves to the newly selected tab, not left behind',
+        (tester) async {
+      final tabs = LocationTabs.fromPhotos([
+        _photo('1', 'Vasona Lake'),
+        _photo('2', 'Bay Area Hiking'),
+      ]);
+
+      await tester.pumpWidget(
+        harness(tabs: tabs, selected: 'Vasona Lake', onDelete: (_) {}),
+      );
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+      await tester.pumpWidget(
+        harness(tabs: tabs, selected: 'Bay Area Hiking', onDelete: (_) {}),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
+    testWidgets('tapping it reports the selected tab\'s location, not a tab switch',
+        (tester) async {
+      String? deleted;
+      String? switchedTo = 'unset';
+      final tabs = LocationTabs.fromPhotos([
+        _photo('1', 'Vasona Lake'),
+        _photo('2', 'Bay Area Hiking'),
+      ]);
+
+      await tester.pumpWidget(
+        harness(
+          tabs: tabs,
+          selected: 'Vasona Lake',
+          onChanged: (loc) => switchedTo = loc,
+          onDelete: (loc) => deleted = loc,
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+
+      expect(deleted, 'Vasona Lake');
+      // HitTestBehavior.opaque on the delete icon must swallow the tap
+      // rather than letting it fall through and re-select the tab.
+      expect(switchedTo, 'unset');
     });
   });
 }

@@ -27,18 +27,26 @@ class ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<ExploreView> {
-  final _firestoreService = FirestoreService();
-  late Random _random;
+  /// Subscribed once. Created in build, a new stream each rebuild made the
+  /// StreamBuilder resubscribe and flash its spinner.
+  late final Stream<List<PhotoPost>> _photos = FirestoreService()
+      .streamAllPhotos();
+
+  /// The shuffle's seed, not a [Random]: each build shuffles with a fresh
+  /// `Random(_seed)`, so every rebuild deals the same order. Sharing one
+  /// Random across builds drew new numbers each time and reordered the grid
+  /// on any rebuild at all.
+  late int _seed;
 
   static const _perLocation = 2;
 
   @override
   void initState() {
     super.initState();
-    _random = Random();
+    _seed = Random().nextInt(1 << 32);
   }
 
-  void _reshuffle() => setState(() => _random = Random());
+  void _reshuffle() => setState(() => _seed = Random().nextInt(1 << 32));
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +89,7 @@ class _ExploreViewState extends State<ExploreView> {
         ),
         Expanded(
           child: StreamBuilder<List<PhotoPost>>(
-            stream: _firestoreService.streamAllPhotos(),
+            stream: _photos,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -98,7 +106,7 @@ class _ExploreViewState extends State<ExploreView> {
               final picks = (snapshot.data ?? const <PhotoPost>[])
                   .topLikedPerLocation(
                     perLocation: _perLocation,
-                    random: _random,
+                    random: Random(_seed),
                   );
 
               if (picks.isEmpty) {

@@ -97,4 +97,19 @@ class AnalyticsService {
       parameters: {'location': location ?? 'All'},
     ),
   );
+
+  /// The in-app map of where one photo was taken was opened.
+  static void photoMapOpened(String locationName) => _log(
+    'photo_map',
+    () => _a.logEvent(
+      name: 'photo_map_open',
+      parameters: {'location': locationName},
+    ),
+  );
+
+  /// [mode]: masonry or carousel.
+  static void viewModeChanged(String mode) => _log(
+    'view_mode',
+    () => _a.logEvent(name: 'view_mode_change', parameters: {'mode': mode}),
+  );
 }

@@ -56,9 +56,7 @@ class DeleteLocationDialog {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.heartRed,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.heartRed),
             child: Text(
               photoCount == 1 ? 'Delete 1 photo' : 'Delete $photoCount photos',
             ),

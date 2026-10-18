@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -8,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/models/models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/photo_sorting.dart';
+import 'photo_pin.dart';
 
 /// Shows the photos currently on screen as thumbnail pins on a Google map.
 ///
@@ -29,10 +29,6 @@ class PhotoMapView extends StatefulWidget {
 }
 
 class _PhotoMapViewState extends State<PhotoMapView> {
-  /// Thumbnail bytes keyed by image URL, so panning and rebuilding never
-  /// re-downloads a picture that has already been drawn.
-  static final Map<String, BitmapDescriptor> _iconCache = {};
-
   Set<Marker> _markers = {};
   bool _building = true;
   GoogleMapController? _controller;
@@ -60,11 +56,10 @@ class _PhotoMapViewState extends State<PhotoMapView> {
     }
   }
 
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
+  // No dispose of _controller here: the GoogleMap widget disposes its own
+  // controller, and a second dispose fails an assertion on the web
+  // ("Maps cannot be retrieved before calling buildView!") every time the
+  // map is closed.
 
   Future<void> _buildMarkers() async {
     setState(() => _building = true);
@@ -123,7 +118,7 @@ class _PhotoMapViewState extends State<PhotoMapView> {
     for (final photo in reps) {
       // Not awaited in order: each thumbnail swaps itself in when ready.
       unawaited(
-        _thumbnailFor(photo.imageUrl).then((icon) {
+        PhotoPin.iconFor(photo.imageUrl).then((icon) {
           if (!mounted) return;
           setState(() {
             _markers = {
@@ -135,103 +130,6 @@ class _PhotoMapViewState extends State<PhotoMapView> {
         }),
       );
     }
-  }
-
-  /// Resolves an image through Flutter's own image pipeline and draws it as
-  /// a small rounded square with a white border, which reads clearly against
-  /// map tiles at pin size.
-  ///
-  /// This deliberately uses [NetworkImage] rather than a separate HTTP client:
-  /// the photo grid already loads these same URLs successfully, so this reuses
-  /// a path that is known to work, and hits Flutter's image cache so a picture
-  /// already on screen costs no second download.
-  Future<BitmapDescriptor> _thumbnailFor(String url) async {
-    final cached = _iconCache[url];
-    if (cached != null) return cached;
-
-    try {
-      // Decode at roughly pin size. The full file still downloads, but a
-      // 15MB photo is never expanded to full resolution in memory.
-      final source = await _resolve(url).timeout(const Duration(seconds: 60));
-
-      const size = 120.0;
-      const border = 6.0;
-      const inner = size - border * 2;
-
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final rect = const Rect.fromLTWH(0, 0, size, size);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(18)),
-        Paint()..color = Colors.white,
-      );
-      canvas.save();
-      canvas.clipRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(border, border, inner, inner),
-          const Radius.circular(12),
-        ),
-      );
-      // Centre-crop rather than squash: photos are rarely square.
-      final side = source.width < source.height
-          ? source.width.toDouble()
-          : source.height.toDouble();
-      canvas.drawImageRect(
-        source,
-        Rect.fromLTWH(
-          (source.width - side) / 2,
-          (source.height - side) / 2,
-          side,
-          side,
-        ),
-        const Rect.fromLTWH(border, border, inner, inner),
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-      canvas.restore();
-
-      final picture = recorder.endRecording();
-      final rendered = await picture.toImage(size.round(), size.round());
-      final bytes = await rendered.toByteData(format: ui.ImageByteFormat.png);
-      if (bytes == null) return BitmapDescriptor.defaultMarker;
-
-      // An explicit logical size keeps the pin the same on every device;
-      // without it the plugin scales by the device pixel ratio.
-      final icon = BitmapDescriptor.bytes(
-        bytes.buffer.asUint8List(),
-        width: 56,
-        height: 56,
-      );
-      _iconCache[url] = icon;
-      return icon;
-    } catch (e) {
-      // A thumbnail that will not load should still leave a usable pin.
-      debugPrint('[map] thumbnail failed for $url: $e');
-      return BitmapDescriptor.defaultMarker;
-    }
-  }
-
-  /// Bridges an [ImageProvider]'s listener callbacks into a Future.
-  Future<ui.Image> _resolve(String url) {
-    final completer = Completer<ui.Image>();
-    final stream = ResizeImage(
-      NetworkImage(url),
-      width: 240,
-      policy: ResizeImagePolicy.fit,
-    ).resolve(ImageConfiguration.empty);
-    late ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) completer.complete(info.image);
-      },
-      onError: (error, stack) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) completer.completeError(error);
-      },
-    );
-    stream.addListener(listener);
-    return completer.future;
   }
 
   /// Every plotted point, which is what the camera has to frame.
@@ -255,6 +153,19 @@ class _PhotoMapViewState extends State<PhotoMapView> {
     return CameraPosition(target: _boundsOf(pts).centre, zoom: 14);
   }
 
+  /// The smallest real-world box ever handed to the camera fit.
+  ///
+  /// A cluster of photos taken minutes apart at one spot is routinely only
+  /// tens of metres across. Framing a box that small verbatim still looked
+  /// zoomed out in practice — `newLatLngBounds` only zooms in as far as the
+  /// *box* demands, and a few tens of metres across a normal-sized map
+  /// window is a smaller zoom step than it sounds like. Padding the box out
+  /// to this floor whenever the real span is tighter than it asks Maps for
+  /// the closest zoom it has at that spot, which is what actually spreads
+  /// the thumbnails across the view instead of leaving them bunched in the
+  /// middle of a much wider frame.
+  static const _minSpanMetres = 50.0;
+
   ({LatLngBounds box, LatLng centre, double spanMetres}) _boundsOf(
     List<LatLng> pts,
   ) {
@@ -271,39 +182,49 @@ class _PhotoMapViewState extends State<PhotoMapView> {
     const degreeMetres = 111320.0;
     final dLat = (maxLat - minLat) * degreeMetres;
     final dLng =
-        (maxLng - minLng) * degreeMetres * math.cos(centre.latitude * math.pi / 180);
+        (maxLng - minLng) *
+        degreeMetres *
+        math.cos(centre.latitude * math.pi / 180);
     final span = math.max(dLat.abs(), dLng.abs());
 
+    var sw = LatLng(minLat, minLng);
+    var ne = LatLng(maxLat, maxLng);
+    if (span < _minSpanMetres) {
+      final halfDegLat = (_minSpanMetres / 2) / degreeMetres;
+      final halfDegLng = halfDegLat / math.cos(centre.latitude * math.pi / 180);
+      sw = LatLng(centre.latitude - halfDegLat, centre.longitude - halfDegLng);
+      ne = LatLng(centre.latitude + halfDegLat, centre.longitude + halfDegLng);
+    }
+
     return (
-      box: LatLngBounds(
-        southwest: LatLng(minLat, minLng),
-        northeast: LatLng(maxLat, maxLng),
-      ),
+      box: LatLngBounds(southwest: sw, northeast: ne),
       centre: centre,
       spanMetres: span,
     );
   }
 
   /// Frames the pins against the map's real size.
-  ///
-  /// [CameraUpdate.newLatLngBounds] cannot frame a zero-sized box, and a box
-  /// only metres across would zoom past the deepest tile, so anything tighter
-  /// than [_tightSpan] gets a fixed close zoom instead.
-  static const _tightSpan = 60.0;
-
   Future<void> _fitToPins(GoogleMapController controller) async {
     final pts = _points;
     if (pts.isEmpty) return;
     final b = _boundsOf(pts);
-    try {
-      if (b.spanMetres < _tightSpan) {
-        await controller.moveCamera(CameraUpdate.newLatLngZoom(b.centre, 17));
-      } else {
+
+    // onMapCreated can fire a frame or two before the platform view has
+    // actually finished laying out, during which moveCamera throws rather
+    // than waiting. A few short, backed-off retries cover that race without
+    // a fixed delay that would make the common, already-laid-out case feel
+    // sluggish.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
         await controller.moveCamera(CameraUpdate.newLatLngBounds(b.box, 56));
+        return;
+      } catch (e) {
+        if (attempt == 3) {
+          debugPrint('[map] could not fit camera to pins after retries: $e');
+          return; // The initial position is still a reasonable fallback.
+        }
+        await Future.delayed(Duration(milliseconds: 150 * (attempt + 1)));
       }
-    } catch (_) {
-      // A camera move can fail if the map is not laid out yet. The initial
-      // position is still a reasonable view, so this is not worth surfacing.
     }
   }
 

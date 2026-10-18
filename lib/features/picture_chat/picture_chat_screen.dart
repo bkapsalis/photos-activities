@@ -3,15 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
-import '../../core/services/analytics_service.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
-import '../../core/utils/directions.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
+import '../map/photo_location_screen.dart';
 
 class PictureChatScreen extends StatelessWidget {
   final String photoId;
@@ -286,14 +285,15 @@ class _MobilePictureChat extends StatelessWidget {
                 ),
               ),
 
-              // Directions sit between the photo and the conversation: the
-              // widget hides itself when the location has no coordinates, so
-              // this row simply is not there for photos that cannot be found.
+              // Where it was taken sits between the photo and the
+              // conversation. It opens an in-app map; directions are offered
+              // from there. For a photo with no recorded location the button
+              // shows disabled, with a line saying why.
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: SizedBox(
                   width: double.infinity,
-                  child: DirectionsButton(photo: photo),
+                  child: MapLocationButton(photo: photo),
                 ),
               ),
 
@@ -447,7 +447,7 @@ double _safeAspect(double ratio) => ratio.isFinite && ratio > 0 ? ratio : 1.0;
   required double aspectRatio,
 }) {
   const chatMin = 340.0, chatMax = 460.0;
-  // Under the photo: the user bar and the directions button.
+  // Under the photo: the user bar and the map button.
   const photoFooterHeight = 110.0;
   // Below this the user bar's name, heart and menu start to crowd.
   const photoMinWidth = 320.0;
@@ -696,13 +696,13 @@ class _WebPictureModal extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Directions sits on its own row under the photo rather than as an
-                        // icon in the crowded user bar, where it was easy to miss.
+                        // The map button sits on its own row under the photo rather than
+                        // as an icon in the crowded user bar, where it was easy to miss.
                         Padding(
                           padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                           child: SizedBox(
                             width: double.infinity,
-                            child: DirectionsButton(
+                            child: MapLocationButton(
                               photo: photo,
                               prominent: true,
                             ),
@@ -943,105 +943,6 @@ class _CommentTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// "Get Directions" for a photo, shown only when its location can actually be
-/// navigated to. Photos labelled with a region rather than a place have no
-/// coordinates, and offering directions to nowhere would be worse than
-/// offering nothing.
-class DirectionsButton extends StatefulWidget {
-  final PhotoPost photo;
-  final bool compact;
-
-  /// Filled rather than outlined. Used on web, where the photo modal has more
-  /// competing controls than the mobile page and an outlined button recedes.
-  final bool prominent;
-
-  const DirectionsButton({
-    super.key,
-    required this.photo,
-    this.compact = false,
-    this.prominent = false,
-  });
-
-  @override
-  State<DirectionsButton> createState() => _DirectionsButtonState();
-}
-
-class _DirectionsButtonState extends State<DirectionsButton> {
-  bool _opening = false;
-
-  Future<void> _go() async {
-    AnalyticsService.directionsRequested(widget.photo.location.name);
-    setState(() => _opening = true);
-    final error = await Directions.toLocation(widget.photo.location);
-    if (!mounted) return;
-    setState(() => _opening = false);
-    if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
-    }
-  }
-
-  /// Long enough to wrap on a narrow phone, so both button variants centre
-  /// the text and allow two lines rather than clipping it.
-  static const _label = 'Get Directions to Location Where Picture Was Taken';
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.photo.location.hasCoordinates) return const SizedBox.shrink();
-
-    final icon = _opening
-        ? SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: widget.prominent ? Colors.white : null,
-            ),
-          )
-        : Icon(Icons.directions, size: widget.prominent ? 20 : 18);
-
-    if (widget.compact) {
-      return IconButton(
-        icon: icon,
-        tooltip: '$_label (${widget.photo.location.name})',
-        onPressed: _opening ? null : _go,
-      );
-    }
-
-    if (widget.prominent) {
-      return FilledButton.icon(
-        onPressed: _opening ? null : _go,
-        icon: icon,
-        label: const Text(
-          _label,
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    }
-
-    return OutlinedButton.icon(
-      onPressed: _opening ? null : _go,
-      icon: icon,
-      label: const Text(_label, textAlign: TextAlign.center),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primary,
-        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       ),
     );
   }
