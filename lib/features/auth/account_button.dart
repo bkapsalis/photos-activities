@@ -6,6 +6,7 @@ import '../../core/config/env_config.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/crash_reporting.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/permissions.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../profile/profile_screen.dart';
 import 'upgrade_account_screen.dart';
@@ -76,15 +77,25 @@ class AccountButton extends StatelessWidget {
                 child: ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.person_add_alt,
-                      size: 20, color: AppColors.primary),
+                  leading: Icon(
+                    Icons.person_add_alt,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
                   title: Text('Create account'),
-                  subtitle: Text('Keeps your chat history',
-                      style: TextStyle(fontSize: 11)),
+                  subtitle: Text(
+                    'Keeps your chat history',
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ),
               ),
-            // Dev builds only: proves crash reports reach Crashlytics.
-            if (EnvConfig.instance.isDev && CrashReporting.supported)
+            // Dev, and moderators on staging: proves crash reports reach
+            // that environment's Crashlytics.
+            if (CrashReporting.supported &&
+                CrashReporting.offersTestCrash(
+                  EnvConfig.instance.environment,
+                  admin: isAdmin(user),
+                ))
               const PopupMenuItem<String>(
                 value: 'testcrash',
                 child: ListTile(
@@ -92,8 +103,10 @@ class AccountButton extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.bug_report_outlined, size: 20),
                   title: Text('Send test crash'),
-                  subtitle: Text('Dev only. Reopen the app to send it.',
-                      style: TextStyle(fontSize: 11)),
+                  subtitle: Text(
+                    'Testing only. Reopen the app to send it.',
+                    style: TextStyle(fontSize: 11),
+                  ),
                 ),
               ),
             const PopupMenuItem<String>(
@@ -162,7 +175,7 @@ class AccountButton extends StatelessWidget {
         content: Text(
           isGuest
               ? 'This guest session cannot be recovered once you sign out, and '
-                  'your chat history will stay behind. Register first to keep it.'
+                    'your chat history will stay behind. Register first to keep it.'
               : 'You can sign back in at any time.',
         ),
         actions: [

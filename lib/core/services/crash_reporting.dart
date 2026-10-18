@@ -5,6 +5,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/env_config.dart';
+import '../utils/permissions.dart';
 
 /// Sends crashes and errors to Firebase Crashlytics.
 ///
@@ -58,10 +59,25 @@ class CrashReporting {
     );
   }
 
-  /// Deliberately crashes the app, to check reports arrive. Dev only; the
-  /// report is sent the next time the app starts.
-  static void testCrash() {
-    if (!supported || !EnvConfig.instance.isDev) return;
-    FirebaseCrashlytics.instance.crash();
+  /// Whether [testCrash] is offered: to anyone in dev, and to a moderator in
+  /// staging, to check that environment's reports arrive before a release.
+  /// Never in prod, where every crash in the console should be a real one.
+  static bool offersTestCrash(Environment environment, {required bool admin}) =>
+      switch (environment) {
+        Environment.dev => true,
+        Environment.staging => admin,
+        Environment.prod => false,
+      };
+
+  /// Deliberately crashes the app, to check reports arrive. The report is
+  /// sent the next time the app starts, and its Logs tab says it was a test.
+  static Future<void> testCrash() async {
+    if (!supported ||
+        !offersTestCrash(EnvConfig.instance.environment, admin: isAdmin())) {
+      return;
+    }
+    final crashlytics = FirebaseCrashlytics.instance;
+    await crashlytics.log('Test crash sent from the account menu');
+    crashlytics.crash();
   }
 }
