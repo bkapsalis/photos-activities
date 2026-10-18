@@ -3,6 +3,7 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/shared_widgets.dart';
 
 class EditPhotoDialog extends StatefulWidget {
   final PhotoPost photo;
@@ -33,11 +34,17 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
   @override
   void initState() {
     super.initState();
-    _locationNameController = TextEditingController(text: widget.photo.location.name);
-    _regionController = TextEditingController(text: widget.photo.location.region ?? '');
-    
+    _locationNameController = TextEditingController(
+      text: widget.photo.location.name,
+    );
+    _regionController = TextEditingController(
+      text: widget.photo.location.region ?? '',
+    );
+
     // Capitalize category for dropdown matching
-    final catRaw = widget.photo.category.isNotEmpty ? widget.photo.category : widget.photo.location.category;
+    final catRaw = widget.photo.category.isNotEmpty
+        ? widget.photo.category
+        : widget.photo.location.category;
     final matchedCat = categories.firstWhere(
       (c) => c.toLowerCase() == catRaw.toLowerCase(),
       orElse: () => categories.first,
@@ -91,6 +98,9 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Material's default 40-point side margins leave too little room on a
+      // phone with a large display size; see dialogInsetPadding.
+      insetPadding: dialogInsetPadding,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
         child: SingleChildScrollView(
@@ -104,13 +114,20 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Edit Photo Spot Details ✏️',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    const Expanded(
+                      child: Text(
+                        'Edit Photo Spot Details ✏️',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.pop(context),
                     ),
                   ],
                 ),
@@ -127,7 +144,11 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                     errorBuilder: (_, __, ___) => Container(
                       height: 140,
                       color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.landscape, size: 48, color: AppColors.textSecondary),
+                      child: const Icon(
+                        Icons.landscape,
+                        size: 48,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
@@ -136,12 +157,18 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                 // Category selector
                 DropdownButtonFormField<String>(
                   initialValue: _selectedCategory,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     border: OutlineInputBorder(),
                   ),
                   items: categories
-                      .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                      .map(
+                        (cat) => DropdownMenuItem(
+                          value: cat,
+                          child: Text(cat, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
                       .toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedCategory = val);
@@ -156,8 +183,9 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                     labelText: 'Spot Name',
                     border: OutlineInputBorder(),
                   ),
-                  validator: (val) =>
-                      (val == null || val.trim().isEmpty) ? 'Please enter spot name' : null,
+                  validator: (val) => (val == null || val.trim().isEmpty)
+                      ? 'Please enter spot name'
+                      : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -174,8 +202,10 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                 if (_errorMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(_errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
                   ),
 
                 SizedBox(
@@ -186,16 +216,26 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     child: _isSaving
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
-                        : const Text('Save Changes',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        : const Text(
+                            'Save Changes',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ],

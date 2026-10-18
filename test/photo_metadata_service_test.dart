@@ -137,4 +137,33 @@ void main() {
       expect(w.locationSource, LocationSource.none);
     });
   });
+
+  group('PhotoMetadata.withDeviceLocation', () {
+    test('fills a missing location and says it came from the phone', () {
+      const capture = PhotoMetadata(cameraModel: 'Pixel 7 Pro');
+      final m = capture.withDeviceLocation(37.79, -122.40);
+      expect(m.latitude, 37.79);
+      expect(m.longitude, -122.40);
+      expect(m.locationSource, LocationSource.device);
+      expect(m.cameraModel, 'Pixel 7 Pro');
+    });
+
+    test('never replaces the location the photo recorded itself', () {
+      const fromExif = PhotoMetadata(
+        latitude: 37.4699241,
+        longitude: -122.3113516,
+        locationSource: LocationSource.exif,
+      );
+      final m = fromExif.withDeviceLocation(37.79, -122.40);
+      expect(m.latitude, 37.4699241);
+      expect(m.locationSource, LocationSource.exif);
+    });
+
+    test('survives a Firestore round trip', () {
+      final m = PhotoMetadata.empty.withDeviceLocation(37.79, -122.40);
+      final back = PhotoMetadata.fromFirestore(m.toFirestore());
+      expect(back.locationSource, LocationSource.device);
+      expect(back.hasLocation, isTrue);
+    });
+  });
 }

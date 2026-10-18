@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/firestore_service.dart';
 
+/// Margins around the app's form dialogs. Material's default leaves 40
+/// points each side, which on a phone with a large display size (a Pixel 7
+/// Pro set to a bigger "Display size" is about 345 points wide) left the
+/// forms about 217 points of room — too little for a title beside its close
+/// button, or "Museums - Historic Sites" in a dropdown.
+const dialogInsetPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 24);
+
 class UserAvatar extends StatelessWidget {
   final String initials;
   final Color color;
@@ -192,6 +199,8 @@ class _LocationNameFieldState extends State<LocationNameField> {
 
         return DropdownButtonFormField<String>(
           initialValue: currentValue,
+          // Fit the field and cut long names short, rather than overflow it.
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Location Name',
             hintText: 'Select a location',
@@ -199,7 +208,12 @@ class _LocationNameFieldState extends State<LocationNameField> {
             isDense: widget.isDense,
           ),
           items: [
-            ...locations.map((loc) => DropdownMenuItem(value: loc, child: Text(loc))),
+            ...locations.map(
+              (loc) => DropdownMenuItem(
+                value: loc,
+                child: Text(loc, overflow: TextOverflow.ellipsis),
+              ),
+            ),
             const DropdownMenuItem(
               value: _addNewValue,
               child: Text('+ Add new location'),

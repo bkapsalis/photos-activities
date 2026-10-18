@@ -54,6 +54,7 @@ dependencies:
   firebase_analytics: ^12.6.0
   firebase_crashlytics: ^5.4.0
   firebase_performance: ^0.11.6
+  geolocator: ^14.0.2
 
 
 dev_dependencies:

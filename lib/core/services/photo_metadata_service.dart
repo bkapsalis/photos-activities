@@ -19,8 +19,22 @@ class PhotoMetadataService {
   Future<PhotoMetadata> extract(Uint8List bytes) async {
     try {
       final exif = await readExifFromBytes(bytes);
-      if (exif.tags.isEmpty) return PhotoMetadata.empty;
-      return _fromTags(exif.tags);
+      if (exif.tags.isEmpty) {
+        debugPrint('[metadata] no EXIF at all');
+        return PhotoMetadata.empty;
+      }
+      final metadata = _fromTags(exif.tags);
+      // Says which of three things happened to the location, never the
+      // location itself: kept, blanked out by the platform (Android hands
+      // over zeroed tags when an app lacks ACCESS_MEDIA_LOCATION), or never
+      // recorded by the camera.
+      final gpsState = metadata.hasLocation
+          ? 'kept'
+          : exif.tags.containsKey('GPS GPSLatitude')
+          ? 'present but blanked'
+          : 'not recorded';
+      debugPrint('[metadata] GPS $gpsState');
+      return metadata;
     } catch (e) {
       debugPrint('[metadata] unreadable: $e');
       return PhotoMetadata.empty;

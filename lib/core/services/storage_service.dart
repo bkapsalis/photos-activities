@@ -8,6 +8,9 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:file_picker/file_picker.dart';
 
+import 'folder_picker.dart' as folder_picker;
+import 'media_location_access.dart';
+
 class PickedFileData {
   final String name;
   final Uint8List bytes;
@@ -41,10 +44,7 @@ class StorageService {
       final storagePath = 'photos/${category.toLowerCase()}/$photoId.jpg';
       final ref = _storage.ref().child(storagePath);
 
-      final uploadTask = await ref.putFile(
-        file,
-        _uploadMetadata(),
-      );
+      final uploadTask = await ref.putFile(file, _uploadMetadata());
 
       if (uploadTask.state == TaskState.success) {
         return await ref.getDownloadURL();
@@ -63,14 +63,14 @@ class StorageService {
     required String photoId,
   }) async {
     try {
-      final sanitizedCategory = category.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+      final sanitizedCategory = category.trim().toLowerCase().replaceAll(
+        RegExp(r'\s+'),
+        '-',
+      );
       final storagePath = 'photos/$sanitizedCategory/$photoId.jpg';
       final ref = _storage.ref().child(storagePath);
 
-      final uploadTask = await ref.putData(
-        bytes,
-        _uploadMetadata(),
-      );
+      final uploadTask = await ref.putData(bytes, _uploadMetadata());
 
       if (uploadTask.state == TaskState.success) {
         return await ref.getDownloadURL();
@@ -90,7 +90,11 @@ class StorageService {
   }) async {
     try {
       final bytes = await xFile.readAsBytes();
-      return uploadBytes(bytes: bytes, category: category, photoId: photoId);
+      return await uploadBytes(
+        bytes: bytes,
+        category: category,
+        photoId: photoId,
+      );
     } catch (e) {
       print('Error uploading XFile: $e');
       return null;
@@ -149,21 +153,28 @@ class StorageService {
 
   /// Pick one image, by whichever route keeps the photo's location intact.
   ///
-  /// Measured on all three platforms with a file carrying known GPS:
+  /// Measured with a file carrying known GPS:
   ///
-  /// | platform | route                     | GPS |
-  /// |----------|---------------------------|-----|
-  /// | iOS      | image_picker (PHPicker)   | kept |
-  /// | web      | browser file input        | kept |
-  /// | Android  | file_picker (documents)   | kept |
-  /// | Android  | image_picker (gallery)    | **zeroed** |
+  /// | platform | route                                        | GPS |
+  /// |----------|----------------------------------------------|-----|
+  /// | iOS      | image_picker (PHPicker)                      | kept |
+  /// | web      | browser file input                           | kept |
+  /// | Android  | file_picker (documents), reread as original  | kept |
+  /// | Android  | file_picker (documents), as handed over      | **zeroed** |
+  /// | Android  | image_picker (gallery)                       | **zeroed** |
   ///
-  /// Android's system photo picker hands back the GPS tags with every value
-  /// set to 0/0 — the position is gone before Dart sees the bytes, and no
-  /// amount of parsing recovers it. The document picker reads the same file
-  /// without that redaction, so Android gallery picks go through it instead.
-  /// Camera capture is the app's own file and is not redacted, so it stays on
-  /// image_picker everywhere.
+  /// Android hands back the GPS tags with every value set to 0/0 unless the
+  /// app holds ACCESS_MEDIA_LOCATION *and* reopens the photo asking for the
+  /// original — the position is gone before Dart sees the bytes otherwise,
+  /// and no amount of parsing recovers it. (The document picker once avoided
+  /// this; measured again 2026-10-17 on the Android 16 emulator, it no longer
+  /// does.) So Android gallery picks go through the document picker, whose
+  /// results carry the content address needed to reread the original; see
+  /// [pickFilesViaFilePicker] and MediaLocationAccess. Camera capture is the
+  /// app's own file and is not redacted, so it stays on image_picker
+  /// everywhere — though the Pixel Camera leaves the location out of photos
+  /// taken for another app, so the upload dialog adds the phone's position
+  /// instead (CaptureLocationService).
   Future<PickedFileData?> pickSingleImage({
     ImageSource source = ImageSource.gallery,
   }) async {
@@ -190,13 +201,9 @@ class StorageService {
   }
 
   /// Pick multiple images from gallery (up to [limit])
-  Future<List<XFile>> pickMultiImage({
-    int limit = 50,
-  }) async {
+  Future<List<XFile>> pickMultiImage({int limit = 50}) async {
     final picker = ImagePicker();
-    final images = await picker.pickMultiImage(
-      limit: limit,
-    );
+    final images = await picker.pickMultiImage(limit: limit);
     // Enforce limit client-side as a safety net
     if (images.length > limit) {
       return images.sublist(0, limit);
@@ -207,6 +214,9 @@ class StorageService {
   /// Pick files via FilePicker (allows Cmd+A / Ctrl+A to select all files in a folder)
   Future<List<PickedFileData>> pickFilesViaFilePicker({int limit = 50}) async {
     try {
+      // Android hands over photos with their GPS blanked unless the app has
+      // asked for photo locations; see MediaLocationAccess.
+      final canReadLocation = await MediaLocationAccess.ensure();
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
         type: FileType.image,
@@ -219,6 +229,13 @@ class StorageService {
       for (final file in result.files) {
         if (list.length >= limit) break;
         Uint8List? bytes = file.bytes;
+        // Reread from the gallery as the original, so the GPS survives. The
+        // picker's own copy has it zeroed on Android.
+        final identifier = file.identifier;
+        if (canReadLocation && identifier != null) {
+          final original = await MediaLocationAccess.readOriginal(identifier);
+          if (original != null && original.isNotEmpty) bytes = original;
+        }
         if (bytes == null && file.path != null) {
           final f = File(file.path!);
           if (await f.exists()) {
@@ -236,34 +253,26 @@ class StorageService {
     }
   }
 
-  /// Pick an entire directory folder and automatically load all image files inside it
+  /// Pick an entire folder and load every image file inside it.
+  ///
+  /// `file_picker`'s `getDirectoryPath()` has no Android, iOS or web
+  /// implementation — only macOS, Windows and Linux, none of which this app
+  /// ships to — so calling it on any of our actual platforms always threw
+  /// `UnimplementedError` and the button did nothing. Web gets a real
+  /// directory picker instead, via the browser's own `<input
+  /// webkitdirectory>` (see folder_picker_web.dart). Android and iOS have no
+  /// comparable API at all, so there the native multi-file picker is the
+  /// honest equivalent: it lets someone navigate into a folder and select
+  /// every file in it, which is the same outcome by a different gesture.
   Future<List<PickedFileData>> pickFolderAndScanImages({int limit = 50}) async {
+    if (!kIsWeb) {
+      return pickFilesViaFilePicker(limit: limit);
+    }
     try {
-      final String? selectedDirectory = await FilePicker.getDirectoryPath();
-      if (selectedDirectory == null || selectedDirectory.isEmpty) return [];
-
-      final dir = Directory(selectedDirectory);
-      if (!await dir.exists()) return [];
-
-      final entities = await dir.list().toList();
-      final validExts = {'.jpg', '.jpeg', '.png', '.webp', '.heic'};
-      final list = <PickedFileData>[];
-
-      for (final entity in entities) {
-        if (list.length >= limit) break;
-        if (entity is File) {
-          final pathLower = entity.path.toLowerCase();
-          final hasValidExt = validExts.any((ext) => pathLower.endsWith(ext));
-          if (hasValidExt) {
-            final bytes = await entity.readAsBytes();
-            if (bytes.isNotEmpty) {
-              final fileName = entity.path.split(Platform.pathSeparator).last;
-              list.add(PickedFileData(name: fileName, bytes: bytes));
-            }
-          }
-        }
-      }
-      return list;
+      final files = await folder_picker.pickFolderImages(limit: limit);
+      return files
+          .map((f) => PickedFileData(name: f.name, bytes: f.bytes))
+          .toList();
     } catch (e) {
       print('Error in pickFolderAndScanImages: $e');
       return [];

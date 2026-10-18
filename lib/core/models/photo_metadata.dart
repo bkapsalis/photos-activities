@@ -12,6 +12,10 @@ enum LocationSource {
   /// Derived from the place name rather than the photo.
   geocoded,
 
+  /// Where the phone was when the photo was taken in the app, because the
+  /// camera recorded no location of its own.
+  device,
+
   /// No coordinates.
   none;
 
@@ -104,6 +108,18 @@ class PhotoMetadata {
       originalWidth: originalWidth ?? this.originalWidth,
       originalHeight: originalHeight ?? this.originalHeight,
       locationSource: locationSource ?? this.locationSource,
+    );
+  }
+
+  /// Fills in [latitude]/[longitude] as where the device was, but only when
+  /// the photo carried no location of its own: GPS the camera wrote into the
+  /// file always wins over the phone's position at upload time.
+  PhotoMetadata withDeviceLocation(double latitude, double longitude) {
+    if (hasLocation) return this;
+    return copyWith(
+      latitude: latitude,
+      longitude: longitude,
+      locationSource: LocationSource.device,
     );
   }
 

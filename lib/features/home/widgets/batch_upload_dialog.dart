@@ -5,6 +5,7 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/image_processing_service.dart';
+import '../../../core/services/performance_service.dart';
 import '../../../core/services/photo_metadata_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -15,7 +16,10 @@ class BatchUploadDialog extends StatefulWidget {
 
   const BatchUploadDialog({super.key, this.initialCategory = 'Hiking Areas'});
 
-  static Future<void> show(BuildContext context, {String initialCategory = 'Hiking Areas'}) {
+  static Future<void> show(
+    BuildContext context, {
+    String initialCategory = 'Hiking Areas',
+  }) {
     return showDialog(
       context: context,
       barrierDismissible: false,
@@ -64,16 +68,24 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
 
   Future<void> _selectFolder() async {
     if (_isPicking) return;
-    setState(() { _isPicking = true; _errorMessage = null; });
+    setState(() {
+      _isPicking = true;
+      _errorMessage = null;
+    });
 
     try {
       final remaining = _maxImages - _selectedImages.length;
       if (remaining <= 0) {
-        setState(() { _errorMessage = 'Maximum $_maxImages images reached.'; _isPicking = false; });
+        setState(() {
+          _errorMessage = 'Maximum $_maxImages images reached.';
+          _isPicking = false;
+        });
         return;
       }
 
-      final picked = await _storageService.pickFolderAndScanImages(limit: remaining);
+      final picked = await _storageService.pickFolderAndScanImages(
+        limit: remaining,
+      );
 
       if (picked.isNotEmpty) {
         setState(() {
@@ -93,16 +105,24 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
 
   Future<void> _selectFiles() async {
     if (_isPicking) return;
-    setState(() { _isPicking = true; _errorMessage = null; });
+    setState(() {
+      _isPicking = true;
+      _errorMessage = null;
+    });
 
     try {
       final remaining = _maxImages - _selectedImages.length;
       if (remaining <= 0) {
-        setState(() { _errorMessage = 'Maximum $_maxImages images reached.'; _isPicking = false; });
+        setState(() {
+          _errorMessage = 'Maximum $_maxImages images reached.';
+          _isPicking = false;
+        });
         return;
       }
 
-      final picked = await _storageService.pickFilesViaFilePicker(limit: remaining);
+      final picked = await _storageService.pickFilesViaFilePicker(
+        limit: remaining,
+      );
 
       if (picked.isNotEmpty) {
         setState(() {
@@ -135,7 +155,12 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
     }
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() { _isUploading = true; _errorMessage = null; _uploadedCount = 0; _failedCount = 0; });
+    setState(() {
+      _isUploading = true;
+      _errorMessage = null;
+      _uploadedCount = 0;
+      _failedCount = 0;
+    });
 
     final currentUser = auth.FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -166,44 +191,48 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
         );
         decoded.dispose();
 
-        final upload = await _imageProcessing.prepareForUpload(
-          img.bytes,
-          photographer: userProfile.name,
-        );
-        final imageUrl = await _storageService.uploadBytes(
-          bytes: upload,
-          category: _selectedCategory,
-          photoId: photoId,
-        );
+        // Same trace name as the single-upload dialog: both feed one
+        // "how long does publishing take" distribution in the dashboard.
+        await PerformanceService.trace('photo_upload_total', () async {
+          final upload = await _imageProcessing.prepareForUpload(
+            img.bytes,
+            photographer: userProfile.name,
+          );
+          final imageUrl = await _storageService.uploadBytes(
+            bytes: upload,
+            category: _selectedCategory,
+            photoId: photoId,
+          );
 
-        if (imageUrl == null) throw Exception('Upload failed');
+          if (imageUrl == null) throw Exception('Upload failed');
 
-        final location = Location(
-          id: 'loc_$photoId',
-          name: _locationNameController.text.trim(),
-          region: _regionController.text.trim().isNotEmpty
-              ? _regionController.text.trim()
-              : 'Bay Area, CA',
-          postCount: 1,
-          category: _selectedCategory,
-          latitude: metadata.latitude,
-          longitude: metadata.longitude,
-        );
+          final location = Location(
+            id: 'loc_$photoId',
+            name: _locationNameController.text.trim(),
+            region: _regionController.text.trim().isNotEmpty
+                ? _regionController.text.trim()
+                : 'Bay Area, CA',
+            postCount: 1,
+            category: _selectedCategory,
+            latitude: metadata.latitude,
+            longitude: metadata.longitude,
+          );
 
-        final photoPost = PhotoPost(
-          id: photoId,
-          imageUrl: imageUrl,
-          location: location,
-          user: userProfile,
-          heartCount: 0,
-          commentCount: 0,
-          aspectRatio: aspectRatio,
-          category: _selectedCategory,
-          createdAt: DateTime.now(),
-          metadata: metadata,
-        );
+          final photoPost = PhotoPost(
+            id: photoId,
+            imageUrl: imageUrl,
+            location: location,
+            user: userProfile,
+            heartCount: 0,
+            commentCount: 0,
+            aspectRatio: aspectRatio,
+            category: _selectedCategory,
+            createdAt: DateTime.now(),
+            metadata: metadata,
+          );
 
-        await _firestoreService.addPhoto(photoPost);
+          await _firestoreService.addPhoto(photoPost);
+        });
         if (mounted) setState(() => _uploadedCount++);
       } catch (e) {
         if (mounted) setState(() => _failedCount++);
@@ -219,7 +248,9 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                 ? 'All $_uploadedCount photos uploaded! 🎉'
                 : '$_uploadedCount uploaded, $_failedCount failed.',
           ),
-          backgroundColor: _failedCount == 0 ? AppColors.primary : Colors.orange,
+          backgroundColor: _failedCount == 0
+              ? AppColors.primary
+              : Colors.orange,
         ),
       );
     }
@@ -229,6 +260,9 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Material's default 40-point side margins leave too little room on a
+      // phone with a large display size; see dialogInsetPadding.
+      insetPadding: dialogInsetPadding,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
         child: Padding(
@@ -243,11 +277,20 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Upload from Folder 📁',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Expanded(
+                      child: Text(
+                        'Upload from Folder 📁',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed: _isUploading ? null : () => Navigator.pop(context),
+                      onPressed: _isUploading
+                          ? null
+                          : () => Navigator.pop(context),
                     ),
                   ],
                 ),
@@ -258,7 +301,9 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isPicking || _isUploading ? null : _selectFolder,
+                        onPressed: _isPicking || _isUploading
+                            ? null
+                            : _selectFolder,
                         icon: const Icon(Icons.folder_open),
                         label: const Text('Select Folder'),
                         style: OutlinedButton.styleFrom(
@@ -269,7 +314,9 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isPicking || _isUploading ? null : _selectFiles,
+                        onPressed: _isPicking || _isUploading
+                            ? null
+                            : _selectFiles,
                         icon: const Icon(Icons.photo_library),
                         label: const Text('Select Files'),
                         style: OutlinedButton.styleFrom(
@@ -286,9 +333,16 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${_selectedImages.length} image${_selectedImages.length == 1 ? '' : 's'} selected',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      TextButton(onPressed: _isUploading ? null : _clearAll, child: const Text('Clear All')),
+                      Flexible(
+                        child: Text(
+                          '${_selectedImages.length} image${_selectedImages.length == 1 ? '' : 's'} selected',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isUploading ? null : _clearAll,
+                        child: const Text('Clear All'),
+                      ),
                     ],
                   ),
 
@@ -308,20 +362,29 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                                 borderRadius: BorderRadius.circular(8),
                                 child: Image.memory(
                                   _selectedImages[index].bytes,
-                                  width: 70, height: 70, fit: BoxFit.cover,
+                                  width: 70,
+                                  height: 70,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
                               if (!_isUploading)
                                 Positioned(
-                                  top: 0, right: 0,
+                                  top: 0,
+                                  right: 0,
                                   child: GestureDetector(
                                     onTap: () => _removeImage(index),
                                     child: Container(
-                                      width: 20, height: 20,
+                                      width: 20,
+                                      height: 20,
                                       decoration: const BoxDecoration(
-                                        color: Colors.red, shape: BoxShape.circle,
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -336,13 +399,23 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                 // Category
                 DropdownButtonFormField<String>(
                   initialValue: _selectedCategory,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
-                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (val) { if (val != null) setState(() => _selectedCategory = val); },
+                  items: categories
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedCategory = val);
+                  },
                 ),
                 const SizedBox(height: 12),
 
@@ -370,7 +443,10 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                 if (_errorMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
                   ),
 
                 // Upload progress
@@ -381,12 +457,15 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                       children: [
                         LinearProgressIndicator(
                           value: _selectedImages.isNotEmpty
-                              ? (_uploadedCount + _failedCount) / _selectedImages.length
+                              ? (_uploadedCount + _failedCount) /
+                                    _selectedImages.length
                               : 0,
                         ),
                         const SizedBox(height: 4),
-                        Text('$_uploadedCount / ${_selectedImages.length} uploaded',
-                            style: const TextStyle(fontSize: 12)),
+                        Text(
+                          '$_uploadedCount / ${_selectedImages.length} uploaded',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -396,23 +475,34 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: _isUploading || _selectedImages.isEmpty ? null : _uploadAll,
+                    onPressed: _isUploading || _selectedImages.isEmpty
+                        ? null
+                        : _uploadAll,
                     icon: _isUploading
                         ? const SizedBox(
-                            width: 20, height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Icon(Icons.cloud_upload),
                     label: Text(
                       _isUploading
                           ? 'Uploading...'
                           : 'Upload ${_selectedImages.length} Photo${_selectedImages.length == 1 ? '' : 's'}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),

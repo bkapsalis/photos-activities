@@ -2,13 +2,21 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Needed to read where a picked photo was taken. Without it Android
+         blanks the GPS (camera, time and size still come through), and the
+         document picker no longer avoids that: measured 2026-10-17 on the
+         Android 16 emulator, a photo with known GPS arrived zeroed. Holding
+         this alone is not enough either: Android only returns the real GPS
+         to an app that also opens the photo with MediaStore.setRequireOriginal,
+         which MainActivity's readOriginal does. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- No ACCESS_MEDIA_LOCATION: measured, and it does nothing here. Android
-         only returns unredacted GPS to an app that also calls
-         MediaStore.setRequireOriginal(), which image_picker never does. Photo
-         location is obtained through the document picker instead - see
-         StorageService.pickSingleImage - so requesting this would be asking
-         for a sensitive permission the app cannot use. -->
+    <!-- For photos taken in the app: the Pixel Camera, like many camera apps,
+         leaves the location out of photos it takes on another app's behalf,
+         so the app records where the phone is instead. Asked for only when
+         taking a photo. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:label="bills_bay_area"
