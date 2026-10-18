@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import 'analytics_service.dart';
+import 'performance_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -93,7 +94,10 @@ class FirestoreService {
   /// Add a new photo post
   Future<String?> addPhoto(PhotoPost photo) async {
     try {
-      final docRef = await _photosRef.add(photo.toFirestore());
+      final docRef = await PerformanceService.trace(
+        'firestore_add_photo',
+        () => _photosRef.add(photo.toFirestore()),
+      );
       AnalyticsService.photoUploaded(
         category: photo.category,
         hasLocation: photo.location.hasCoordinates,
