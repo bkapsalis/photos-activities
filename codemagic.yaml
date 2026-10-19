@@ -63,13 +63,17 @@ workflows:
       - build/app/outputs/flutter-apk/app-staging-release.apk
       - build/ios/ipa/*.ipa
       - build/web/**
-    publishing:
-      firebase:
-        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
-        android:
-          app_id: $FIREBASE_ANDROID_APP_ID_STAGING
-          groups:
-            - internal-testers
+    # Publishing is off until its secrets exist in Codemagic: the whole file
+    # is validated before any workflow runs, so a missing variable here
+    # blocks the dev build too. Restore once FIREBASE_SERVICE_ACCOUNT and
+    # FIREBASE_ANDROID_APP_ID_STAGING are set.
+    # publishing:
+    #   firebase:
+    #     firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
+    #     android:
+    #       app_id: $FIREBASE_ANDROID_APP_ID_STAGING
+    #       groups:
+    #         - internal-testers
 
   # ── Production Release ─────────────────────────────────
   prod-release:
@@ -108,11 +112,13 @@ workflows:
       - build/app/outputs/bundle/prodRelease/app-prod-release.aab
       - build/ios/ipa/*.ipa
       - build/web/**
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: production
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_ID
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+    # Off for the same reason as staging's publishing. When restoring, start
+    # on the internal track and promote to production by hand.
+    # publishing:
+    #   google_play:
+    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: production
+    #   app_store_connect:
+    #     api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+    #     key_id: $APP_STORE_CONNECT_KEY_ID
+    #     issuer_id: $APP_STORE_CONNECT_ISSUER_ID
