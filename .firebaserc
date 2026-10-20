@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "photos-activities-dev",
+    "dev": "photos-activities-dev",
+    "staging": "photos-activities-staging",
+    "prod": "photos-activities-prod"
+  }
+}
