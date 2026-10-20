@@ -65,7 +65,37 @@ await check('anyone can read location chat', () => assertSucceeds(getDoc(doc(ano
 await check('own-messages collection group query works', () =>
   assertSucceeds(getDocs(query(collectionGroup(bob().firestore(), 'messages'), where('userId', '==', 'bob')))));
 
-console.log('Firestore — photos');
+// Uploads are closed unless config/app says otherwise; reset() clears it.
+const openUploads = (open = true) => seed((db) => setDoc(doc(db, 'config/app'), { uploadsOpen: open }));
+
+console.log('Firestore — uploads closed (the default)');
+await check('anyone can read the upload switch', async () => {
+  await openUploads(false);
+  await assertSucceeds(getDoc(doc(anon().firestore(), 'config/app')));
+});
+await reset();
+await check('with no switch, a user cannot create a photo', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice'))));
+await check('with no switch, a guest cannot create a photo', () => assertFails(addDoc(collection(guest().firestore(), 'photos'), photo('guest'))));
+await check('with no switch, admin can create a photo', () => assertSucceeds(addDoc(collection(admin().firestore(), 'photos'), photo('bill'))));
+await check('unverified admin email cannot create a photo', () => assertFails(addDoc(collection(fakeAdmin().firestore(), 'photos'), photo('mallory'))));
+await check('admin still cannot create a photo in someone else\'s name', () => assertFails(addDoc(collection(admin().firestore(), 'photos'), photo('alice'))));
+await check('uploadsOpen: false keeps users out', async () => {
+  await openUploads(false);
+  await assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice')));
+});
+await check('a user cannot open uploads', () => assertFails(setDoc(doc(alice().firestore(), 'config/app'), { uploadsOpen: true })));
+await check('admin can open and close uploads', async () => {
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'config/app'), { uploadsOpen: true }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'config/app'), { uploadsOpen: false }));
+});
+await check('closed uploads still allow likes and comments', async () => {
+  await assertSucceeds(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1) }));
+  await assertSucceeds(addDoc(collection(guest().firestore(), 'comments/p1/messages'), { userId: 'guest', text: 'nice' }));
+});
+
+console.log('Firestore — photos (uploads open)');
+await reset();
+await openUploads();
 await check('signed-out user cannot create a photo', () => assertFails(addDoc(collection(anon().firestore(), 'photos'), photo('x'))));
 await check('user can create a photo as themselves', () => assertSucceeds(addDoc(collection(alice().firestore(), 'photos'), photo('alice'))));
 await check('guest can create a photo as themselves', () => assertSucceeds(addDoc(collection(guest().firestore(), 'photos'), photo('guest'))));
@@ -134,6 +164,14 @@ console.log('Storage');
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 const meta = (uid) => ({ contentType: 'image/jpeg', customMetadata: uid ? { ownerUid: uid } : {} });
 await env.clearStorage();
+await reset();
+await check('with no switch, a user cannot upload', () => assertFails(uploadBytes(ref(alice().storage(), 'photos/museums/a.jpg'), jpeg, meta('alice'))));
+await check('with no switch, admin can upload', () => assertSucceeds(uploadBytes(ref(admin().storage(), 'photos/museums/admin.jpg'), jpeg, meta('bill'))));
+await check('uploadsOpen: false keeps users out of Storage', async () => {
+  await openUploads(false);
+  await assertFails(uploadBytes(ref(alice().storage(), 'photos/museums/a.jpg'), jpeg, meta('alice')));
+});
+await openUploads();
 await check('signed-out user cannot upload', () => assertFails(uploadBytes(ref(anon().storage(), 'photos/museums/a.jpg'), jpeg, meta('x'))));
 await check('upload tagged as self succeeds', () => assertSucceeds(uploadBytes(ref(alice().storage(), 'photos/museums/a.jpg'), jpeg, meta('alice'))));
 await check('upload without owner tag fails', () => assertFails(uploadBytes(ref(alice().storage(), 'photos/museums/b.jpg'), jpeg, meta(null))));

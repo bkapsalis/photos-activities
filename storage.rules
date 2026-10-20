@@ -9,6 +9,14 @@ service firebase.storage {
         && request.auth.token.get('email', '') in ['bkapsalis@gmail.com'];
     }
 
+    // The same switch firestore.rules reads: until config/app sets
+    // uploadsOpen, only moderators may upload.
+    function uploadsOpen() {
+      let path = /databases/(default)/documents/config/app;
+      return firestore.exists(path)
+        && firestore.get(path).data.get('uploadsOpen', false) == true;
+    }
+
     // ── Photos ─────────────────────────────────────────
     // Uploads are tagged with their uploader's uid (customMetadata.ownerUid),
     // which is the only link from a file back to a person: the file name is
@@ -22,7 +30,10 @@ service firebase.storage {
       allow create: if request.auth != null
         && request.resource.metadata.get('ownerUid', '') == request.auth.uid
         && request.resource.contentType.matches('image/.*')
-        && request.resource.size < 25 * 1024 * 1024;
+        && request.resource.size < 25 * 1024 * 1024
+        // Last, so the Firestore lookup only runs for an otherwise valid
+        // upload.
+        && (isAdmin() || uploadsOpen());
 
       allow update: if isAdmin()
         || (request.auth != null

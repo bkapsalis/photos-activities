@@ -20,6 +20,15 @@ service cloud.firestore {
         && request.auth.token.get('email', '') in ['bkapsalis@gmail.com'];
     }
 
+    // Until config/app sets uploadsOpen, only moderators may add photos;
+    // everyone can still view, like and comment. Flipped in the Firebase
+    // console, no app release needed. A missing document means closed.
+    // storage.rules reads the same document.
+    function uploadsOpen() {
+      let path = /databases/$(database)/documents/config/app;
+      return exists(path) && get(path).data.get('uploadsOpen', false) == true;
+    }
+
     function ownedByCaller(data) {
       return signedIn() && data.userId == request.auth.uid;
     }
@@ -47,7 +56,7 @@ service cloud.firestore {
     // ── Photos ─────────────────────────────────────────
     match /photos/{photoId} {
       allow read: if true;
-      allow create: if createdAsSelf();
+      allow create: if createdAsSelf() && (isAdmin() || uploadsOpen());
       allow update: if isAdmin()
         || ownerEditKeepsOwner()
         // Anyone signed in can like a photo, one step at a time...
@@ -63,6 +72,14 @@ service cloud.firestore {
     // ── Locations ──────────────────────────────────────
     // The app only reads these; nothing in it writes them.
     match /locations/{locationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── App switches ───────────────────────────────────
+    // config/app holds uploadsOpen. The app reads it to decide whether to
+    // offer uploading; only a moderator may change it.
+    match /config/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
