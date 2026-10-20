@@ -27,3 +27,10 @@ bool canModify(String ownerId, [User? user]) {
   if (user == null) return false;
   return (ownerId.isNotEmpty && user.uid == ownerId) || isAdmin(user);
 }
+
+/// Whether to offer the signed-in user uploading: always to a moderator,
+/// and to everyone once config/app sets uploadsOpen. firestore.rules and
+/// storage.rules enforce the same, so this only keeps the app from offering
+/// an upload the server would refuse.
+bool canUpload({required bool uploadsOpen, User? user}) =>
+    uploadsOpen || isAdmin(user);

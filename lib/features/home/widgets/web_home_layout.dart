@@ -9,6 +9,7 @@ import '../../explore/explore_view.dart';
 import '../../map/photo_map_view.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
+import '../../../core/widgets/upload_access.dart';
 import '../../auth/account_button.dart';
 import '../../auth/upgrade_account_screen.dart';
 import '../../../core/utils/permissions.dart';
@@ -510,35 +511,47 @@ class _WebTopNav extends StatelessWidget {
             // Upload buttons. Web has no floating action button; these are the
             // equivalent, and they are hidden on the map for the same reason:
             // nothing on that page says which place an upload would belong to.
-            if (view != _WebView.map) ...[
-              _ActionButton(
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                onTap: () => UploadPhotoDialog.showCamera(
-                  context,
-                  initialCategory: categories[selectedCategoryIndex],
-                ),
+            // Only for those allowed to upload; see UploadAccess.
+            if (view != _WebView.map)
+              UploadAccess(
+                builder: (context, canUpload) => !canUpload
+                    ? const SizedBox.shrink()
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionButton(
+                            icon: Icons.camera_alt,
+                            label: 'Camera',
+                            onTap: () => UploadPhotoDialog.showCamera(
+                              context,
+                              initialCategory:
+                                  categories[selectedCategoryIndex],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _ActionButton(
+                            icon: Icons.photo_library,
+                            label: 'Upload',
+                            onTap: () => UploadPhotoDialog.showGallery(
+                              context,
+                              initialCategory:
+                                  categories[selectedCategoryIndex],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _ActionButton(
+                            icon: Icons.folder_open,
+                            label: 'Folder',
+                            onTap: () => BatchUploadDialog.show(
+                              context,
+                              initialCategory:
+                                  categories[selectedCategoryIndex],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                      ),
               ),
-              const SizedBox(width: 8),
-              _ActionButton(
-                icon: Icons.photo_library,
-                label: 'Upload',
-                onTap: () => UploadPhotoDialog.showGallery(
-                  context,
-                  initialCategory: categories[selectedCategoryIndex],
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ActionButton(
-                icon: Icons.folder_open,
-                label: 'Folder',
-                onTap: () => BatchUploadDialog.show(
-                  context,
-                  initialCategory: categories[selectedCategoryIndex],
-                ),
-              ),
-              const SizedBox(width: 12),
-            ],
             const AccountButton(size: 34),
           ],
         ),
@@ -849,13 +862,20 @@ class _WebPhotoGrid extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        if (searchQuery.isEmpty) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Upload your first photo using the buttons above!',
-                            style: TextStyle(color: AppColors.textSecondary),
+                        if (searchQuery.isEmpty)
+                          UploadAccess(
+                            builder: (context, canUpload) => !canUpload
+                                ? const SizedBox.shrink()
+                                : const Padding(
+                                    padding: EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      'Upload your first photo using the buttons above!',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ),
                           ),
-                        ],
                       ],
                     ),
                   )

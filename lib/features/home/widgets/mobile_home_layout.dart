@@ -4,6 +4,7 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
+import '../../../core/widgets/upload_access.dart';
 import '../../auth/account_button.dart';
 import '../../auth/upgrade_account_screen.dart';
 import '../../profile/profile_screen.dart';
@@ -459,14 +460,20 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
 
       // FAB with 3 upload options. Only the feed offers uploading: Explore is
       // a read-only shuffle, and on the map the button sits over the tiles and
-      // pins without belonging to the place being looked at.
+      // pins without belonging to the place being looked at. Only for those
+      // allowed to upload; see UploadAccess.
       floatingActionButton: _navIndex != 0
           ? null
-          : FloatingActionButton(
-              onPressed: () => _showUploadOptions(context, currentCategory),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add, size: 28),
+          : UploadAccess(
+              builder: (context, canUpload) => !canUpload
+                  ? const SizedBox.shrink()
+                  : FloatingActionButton(
+                      onPressed: () =>
+                          _showUploadOptions(context, currentCategory),
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      child: const Icon(Icons.add, size: 28),
+                    ),
             ),
 
       bottomNavigationBar: NavigationBar(
@@ -690,13 +697,18 @@ class _EmptyFeed extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               textAlign: TextAlign.center,
             ),
-            if (searchQuery.isEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Tap + to upload your first photo!',
-                style: TextStyle(color: AppColors.textSecondary),
+            if (searchQuery.isEmpty)
+              UploadAccess(
+                builder: (context, canUpload) => !canUpload
+                    ? const SizedBox.shrink()
+                    : const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Tap + to upload your first photo!',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
               ),
-            ],
           ],
         ),
       ),

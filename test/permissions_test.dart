@@ -64,4 +64,21 @@ void main() {
       );
     });
   });
+
+  group('canUpload', () {
+    test('a moderator may, even while uploads are closed', () {
+      expect(canUpload(uploadsOpen: false, user: admin), isTrue);
+    });
+    test('anyone else may not while uploads are closed', () {
+      expect(canUpload(uploadsOpen: false, user: owner), isFalse);
+    });
+    test('an unverified lookalike of the moderator may not', () {
+      final lookalike = _FakeUser('mallory', email: 'bkapsalis@gmail.com');
+      expect(canUpload(uploadsOpen: false, user: lookalike), isFalse);
+    });
+    test('everyone may once uploads are open', () {
+      expect(canUpload(uploadsOpen: true, user: owner), isTrue);
+      expect(canUpload(uploadsOpen: true, user: admin), isTrue);
+    });
+  });
 }
