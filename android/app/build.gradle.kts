@@ -8,6 +8,18 @@ val mapsApiKey: String = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }.getProperty("MAPS_API_KEY") ?: ""
 
+// Release signing: the upload key, from android/key.properties on a
+// developer's machine (git ignores it) or, on Codemagic, from the variables
+// its android_signing setup provides. With neither, release builds fall back
+// to the debug key, which installs locally but cannot go to Google Play.
+val keyProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(property: String, env: String): String? =
+    keyProperties.getProperty(property) ?: System.getenv(env)
+val releaseStoreFile = signingValue("storeFile", "CM_KEYSTORE_PATH")
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -61,10 +73,25 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = signingValue("storePassword", "CM_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "CM_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "CM_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseStoreFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("No upload key found; release builds are signed with the debug key.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
