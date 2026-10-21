@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "593867148848-9ea7ttedjt3u1ucrl0bov2c2j5vi1ttb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.billsbayarea.app.staging",
+            "certificate_hash": "5b8b2ffd93cc2aefba93e089817afdf33dfb175d"
+          }
+        },
+        {
           "client_id": "593867148848-n93irrju31800s4qskjpvakdaiapedq0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

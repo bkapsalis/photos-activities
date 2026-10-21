@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "978335208017-iakfk7hdciof3ddjjjef7bt1t0cr1a10.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.billsbayarea.app",
+            "certificate_hash": "5b8b2ffd93cc2aefba93e089817afdf33dfb175d"
+          }
+        },
+        {
           "client_id": "978335208017-u5bvv9gmbvlas81dmh3i0subm3havcu7.apps.googleusercontent.com",
           "client_type": 3
         }
