@@ -1,7 +1,8 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+
+import 'crash_reporting.dart';
 import '../models/models.dart';
 
 /// Keeps a guest's chat history readable after they register.
@@ -14,7 +15,7 @@ class ChatHistoryService {
   final FirebaseFirestore _db;
 
   ChatHistoryService({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+    : _db = firestore ?? FirebaseFirestore.instance;
 
   /// Firestore rejects batches larger than 500 writes.
   static const int _batchSize = 400;
@@ -27,8 +28,12 @@ class ChatHistoryService {
     try {
       final snapshot = await _authoredBy(userId).count().get();
       return snapshot.count;
-    } catch (e) {
-      debugPrint('ChatHistoryService.countAuthoredMessages failed: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'ChatHistoryService.countAuthoredMessages failed',
+      );
       return null;
     }
   }
@@ -57,15 +62,18 @@ class ChatHistoryService {
         await batch.commit();
       }
       return docs.length;
-    } catch (e) {
-      debugPrint('ChatHistoryService.renameAuthor failed: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'ChatHistoryService.renameAuthor failed',
+      );
       return null;
     }
   }
 
   /// Location chat lives at chats/{id}/messages and picture comments at
   /// comments/{id}/messages, so one collection-group query covers both.
-  Query<Map<String, dynamic>> _authoredBy(String userId) => _db
-      .collectionGroup('messages')
-      .where('userId', isEqualTo: userId);
+  Query<Map<String, dynamic>> _authoredBy(String userId) =>
+      _db.collectionGroup('messages').where('userId', isEqualTo: userId);
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+
+import 'crash_reporting.dart';
 
 /// What one person has added to the community.
 ///
@@ -21,7 +22,7 @@ class ContributionStatsService {
   final FirebaseFirestore _db;
 
   ContributionStatsService({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+    : _db = firestore ?? FirebaseFirestore.instance;
 
   Future<ContributionStats> forUser(String userId) async {
     final photos = await _photoStats(userId);
@@ -48,8 +49,12 @@ class ContributionStatsService {
         likes += (doc.data()['heartCount'] as num?)?.toInt() ?? 0;
       }
       return (count: snapshot.docs.length, likes: likes);
-    } catch (e) {
-      debugPrint('ContributionStatsService._photoStats failed: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'ContributionStatsService._photoStats failed',
+      );
       return null;
     }
   }
@@ -69,8 +74,12 @@ class ContributionStatsService {
       return snapshot.docs
           .where((doc) => doc.reference.path.startsWith('comments/'))
           .length;
-    } catch (e) {
-      debugPrint('ContributionStatsService._commentCount failed: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'ContributionStatsService._commentCount failed',
+      );
       return null;
     }
   }

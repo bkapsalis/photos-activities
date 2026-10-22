@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import 'crash_reporting.dart';
+
 /// What a bulk delete actually managed to remove.
 ///
 /// A delete that half-worked is worse than one that failed outright, because
@@ -75,7 +77,8 @@ class PhotoDeletionService {
     final storedCategory = data['category'];
     final storedLocation = data['locationName'];
     if (storedCategory is! String || storedLocation is! String) return false;
-    return _same(storedCategory, category) && _same(storedLocation, locationName);
+    return _same(storedCategory, category) &&
+        _same(storedLocation, locationName);
   }
 
   /// Finds the photos a given tab is showing.
@@ -117,8 +120,12 @@ class PhotoDeletionService {
     if (url == null || url.isEmpty) {
       try {
         url = (await ref.get()).data()?['imageUrl'] as String?;
-      } catch (e) {
-        debugPrint('[delete] could not read $photoId: $e');
+      } catch (e, stack) {
+        CrashReporting.recordError(
+          e,
+          stack,
+          reason: '[delete] could not read $photoId',
+        );
       }
     }
 
@@ -129,17 +136,25 @@ class PhotoDeletionService {
         if (await _deleteFile(url)) files++;
       }
       comments = await _deleteComments(photoId);
-    } catch (e) {
+    } catch (e, stack) {
       // Leaving the document in place keeps the photo visible and deletable
       // rather than stranding a file with nothing pointing at it.
-      debugPrint('[delete] assets for $photoId: $e');
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: '[delete] assets for $photoId',
+      );
       return const BulkDeleteResult(failed: 1);
     }
 
     try {
       await ref.delete();
-    } catch (e) {
-      debugPrint('[delete] document $photoId: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: '[delete] document $photoId',
+      );
       return BulkDeleteResult(
         filesDeleted: files,
         commentsDeleted: comments,
@@ -179,8 +194,12 @@ class PhotoDeletionService {
         }
         comments += await _deleteComments(doc.id);
         deletable.add(doc.reference);
-      } catch (e) {
-        debugPrint('[delete] skipped ${doc.id}: $e');
+      } catch (e, stack) {
+        CrashReporting.recordError(
+          e,
+          stack,
+          reason: '[delete] skipped ${doc.id}',
+        );
         failed++;
       }
     }
@@ -195,8 +214,8 @@ class PhotoDeletionService {
       try {
         await batch.commit();
         deleted += slice.length;
-      } catch (e) {
-        debugPrint('[delete] batch failed: $e');
+      } catch (e, stack) {
+        CrashReporting.recordError(e, stack, reason: '[delete] batch failed');
         failed += slice.length;
       }
     }

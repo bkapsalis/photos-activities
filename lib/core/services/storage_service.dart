@@ -51,8 +51,8 @@ class StorageService {
         return await ref.getDownloadURL();
       }
       return null;
-    } catch (e) {
-      print('Error uploading photo: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'uploading photo');
       return null;
     }
   }
@@ -77,8 +77,8 @@ class StorageService {
         return await ref.getDownloadURL();
       }
       return null;
-    } catch (e) {
-      print('Error uploading bytes: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'uploading bytes');
       return null;
     }
   }
@@ -96,8 +96,8 @@ class StorageService {
         category: category,
         photoId: photoId,
       );
-    } catch (e) {
-      print('Error uploading XFile: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'uploading XFile');
       return null;
     }
   }
@@ -126,8 +126,8 @@ class StorageService {
     try {
       final storagePath = 'photos/${category.toLowerCase()}/$photoId.jpg';
       await _storage.ref().child(storagePath).delete();
-    } catch (e) {
-      print('Error deleting photo: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'deleting photo');
     }
   }
 
@@ -139,8 +139,8 @@ class StorageService {
     try {
       final storagePath = 'photos/${category.toLowerCase()}/$photoId.jpg';
       return await _storage.ref().child(storagePath).getDownloadURL();
-    } catch (e) {
-      print('Error getting photo URL: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'getting photo URL');
       return null;
     }
   }
@@ -264,8 +264,8 @@ class StorageService {
         }
       }
       return list;
-    } catch (e) {
-      print('Error in pickFilesViaFilePicker: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'picking files');
       return [];
     }
   }
@@ -290,8 +290,8 @@ class StorageService {
       return files
           .map((f) => PickedFileData(name: f.name, bytes: f.bytes))
           .toList();
-    } catch (e) {
-      print('Error in pickFolderAndScanImages: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'picking a folder');
       return [];
     }
   }

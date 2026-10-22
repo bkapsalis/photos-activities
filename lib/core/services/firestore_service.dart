@@ -110,8 +110,8 @@ class FirestoreService {
       final doc = await _photosRef.doc(photoId).get();
       if (!doc.exists) return null;
       return PhotoPost.fromFirestore(doc);
-    } catch (e) {
-      print('Error fetching photo: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'fetching photo');
       return null;
     }
   }
@@ -173,8 +173,8 @@ class FirestoreService {
     try {
       final snapshot = await _locationsRef.get();
       return _parseEach(snapshot.docs, Location.fromFirestore);
-    } catch (e) {
-      print('Error fetching locations: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'fetching locations');
       return [];
     }
   }
