@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../config/env_config.dart';
 import '../models/models.dart';
 import 'analytics_service.dart';
+import 'crash_reporting.dart';
 
 /// Outcome of an auth call, carrying a human-readable reason on failure.
 class AuthResult {
@@ -29,6 +30,28 @@ class AuthResult {
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  /// For a sign-in method this build or project is not set up for. The
+  /// reader cannot fix that, so they get a plain message; the details of
+  /// what to fix (a console setting, a fingerprint) go to Crashlytics and
+  /// the debug log, where the developer will see them.
+  static String _unavailable(String developerDetail) {
+    CrashReporting.recordError(
+      StateError(developerDetail),
+      StackTrace.current,
+      reason: 'sign-in is misconfigured',
+    );
+    return 'This way of signing in is not available right now. Please try '
+        'another way, or try again later.';
+  }
+
+  /// For an error with no friendlier explanation: [message] for the reader,
+  /// the error itself for the developer. Firebase's own messages are
+  /// written for developers, so they are never shown.
+  static String _failed(Object error, String message) {
+    CrashReporting.recordError(error, StackTrace.current, reason: message);
+    return message;
+  }
 
   // Current user stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -74,26 +97,32 @@ class AuthService {
         AnalyticsService.login('google');
         return AuthResult.success(result.user);
       } on FirebaseAuthException catch (e) {
-        debugPrint('[auth] popup FirebaseAuthException code=${e.code} '
-            'message=${e.message}');
+        debugPrint(
+          '[auth] popup FirebaseAuthException code=${e.code} '
+          'message=${e.message}',
+        );
         return AuthResult.failure(_popupErrorMessage(e));
       } catch (e) {
         debugPrint('[auth] popup unexpected ${e.runtimeType}: $e');
-        return AuthResult.failure('Google sign-in did not complete: $e');
+        return AuthResult.failure(
+          _failed(e, 'Google sign-in did not complete. Please try again.'),
+        );
       }
     }
 
     try {
       await _ensureGoogleReady();
-      final GoogleSignInAccount googleUser =
-          await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance
+          .authenticate();
 
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
       if (idToken == null) {
         return AuthResult.failure(
-          'Google did not return an ID token. Check that the OAuth web client '
-          'id for this environment is correct.',
+          _unavailable(
+            'Google returned no ID token: check the OAuth web client id for '
+            'this environment',
+          ),
         );
       }
 
@@ -102,13 +131,19 @@ class AuthService {
       AnalyticsService.login('google');
       return AuthResult.success(result.user);
     } on GoogleSignInException catch (e) {
-      debugPrint('[auth] GoogleSignInException code=${e.code} '
-          'description=${e.description} details=${e.details}');
+      debugPrint(
+        '[auth] GoogleSignInException code=${e.code} '
+        'description=${e.description} details=${e.details}',
+      );
       return AuthResult.failure(_googleErrorMessage(e));
     } on FirebaseAuthException catch (e) {
-      return AuthResult.failure(e.message ?? 'Google sign-in did not complete.');
+      return AuthResult.failure(
+        _failed(e, 'Google sign-in did not complete. Please try again.'),
+      );
     } catch (e) {
-      return AuthResult.failure('Google sign-in did not complete: $e');
+      return AuthResult.failure(
+        _failed(e, 'Google sign-in did not complete. Please try again.'),
+      );
     }
   }
 
@@ -123,34 +158,38 @@ class AuthService {
         return 'Your browser blocked the sign-in popup. Allow popups for this '
             'site and try again.';
       case 'unauthorized-domain':
-        return 'This address is not an authorized domain for Google sign-in. '
-            'Add it in Firebase Console → Authentication → Settings.';
+        return _unavailable(
+          'unauthorized-domain: add this site in Firebase Console → '
+          'Authentication → Settings → Authorized domains',
+        );
       case 'operation-not-allowed':
-        return 'Google sign-in is turned off for this project.';
+        return _unavailable('Google sign-in provider is disabled');
       default:
-        return e.message ?? 'Google sign-in did not complete.';
+        return _failed(e, 'Google sign-in did not complete. Please try again.');
     }
   }
 
   String _googleErrorMessage(GoogleSignInException e) {
     switch (e.code) {
       case GoogleSignInExceptionCode.canceled:
-														return 'Google sign-in was cancelled.';
+        return 'Google sign-in was cancelled.';
       case GoogleSignInExceptionCode.interrupted:
         return 'Google sign-in was interrupted. Please try again.';
       case GoogleSignInExceptionCode.clientConfigurationError:
-        return 'Google sign-in is misconfigured for this build (check the '
-            'SHA-1 fingerprint and OAuth client id).';
+        return _unavailable(
+          'Google sign-in client configuration error: check this build\'s '
+          'SHA-1 fingerprint in Firebase and the OAuth client id',
+        );
       case GoogleSignInExceptionCode.providerConfigurationError:
-        return 'Google Play services is unavailable or out of date on this '
-            'device.';
+        return 'Google sign-in needs Google Play services, which is missing '
+            'or out of date on this device.';
       case GoogleSignInExceptionCode.uiUnavailable:
         return 'No Google account is available on this device. Add one in '
             'Settings, then try again.';
       case GoogleSignInExceptionCode.userMismatch:
         return 'That Google account did not match the one expected.';
       case GoogleSignInExceptionCode.unknownError:
-        return e.description ?? 'Google sign-in did not complete.';
+        return _failed(e, 'Google sign-in did not complete. Please try again.');
     }
   }
 
@@ -210,8 +249,7 @@ class AuthService {
   String _appleErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'operation-not-allowed':
-        return 'Apple sign-in is turned off for this project. Enable the Apple '
-            'provider in Firebase Console → Authentication → Sign-in method.';
+        return _unavailable('Apple sign-in provider is disabled');
       case 'canceled':
       case 'user-cancelled':
       case 'web-context-canceled':
@@ -223,7 +261,7 @@ class AuthService {
       case 'invalid-credential':
         return 'Apple could not verify that sign-in. Please try again.';
       default:
-        return e.message ?? 'Apple sign-in did not complete.';
+        return _failed(e, 'Apple sign-in did not complete. Please try again.');
     }
   }
 
@@ -266,16 +304,16 @@ class AuthService {
       case 'network-request-failed':
         return 'No network connection. Check your connection and try again.';
       case 'operation-not-allowed':
-        return 'Email and password sign-in is turned off for this project. '
-            'Enable it in Firebase Console \u2192 Authentication \u2192 '
-            'Sign-in method.';
+        return _unavailable('Email/password sign-in provider is disabled');
       default:
-        return e.message ?? 'Sign-in did not complete.';
+        return _failed(e, 'Sign-in did not complete. Please try again.');
     }
   }
 
   Future<AuthResult> createAccountWithEmail(
-      String email, String password) async {
+    String email,
+    String password,
+  ) async {
     try {
       final result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -298,13 +336,11 @@ class AuthService {
       case 'invalid-email':
         return 'That email address is not formatted correctly.';
       case 'operation-not-allowed':
-        return 'Email and password sign-up is turned off for this project. '
-            'Enable it in Firebase Console \u2192 Authentication \u2192 '
-            'Sign-in method.';
+        return _unavailable('Email/password sign-up provider is disabled');
       case 'network-request-failed':
         return 'No network connection. Check your connection and try again.';
       default:
-        return e.message ?? 'Account creation did not complete.';
+        return _failed(e, 'Your account was not created. Please try again.');
     }
   }
 
@@ -331,11 +367,12 @@ class AuthService {
       if (e.code == 'operation-not-allowed' ||
           e.code == 'admin-restricted-operation') {
         return AuthResult.failure(
-          'Guest sign-in is turned off for this project. Enable the Anonymous '
-          'provider in Firebase Console → Authentication → Sign-in method.',
+          _unavailable('Anonymous (guest) sign-in provider is disabled'),
         );
       }
-      return AuthResult.failure(e.message ?? 'Could not start a guest session.');
+      return AuthResult.failure(
+        _failed(e, 'Could not start a guest session. Please try again.'),
+      );
     } catch (e) {
       return AuthResult.failure('Could not start a guest session.');
     }
@@ -415,8 +452,10 @@ class AuthService {
       AnalyticsService.signUp('google');
       return AuthResult.success(_auth.currentUser);
     } on GoogleSignInException catch (e) {
-      debugPrint('[auth] GoogleSignInException code=${e.code} '
-          'description=${e.description} details=${e.details}');
+      debugPrint(
+        '[auth] GoogleSignInException code=${e.code} '
+        'description=${e.description} details=${e.details}',
+      );
       return AuthResult.failure(_googleErrorMessage(e));
     } on FirebaseAuthException catch (e) {
       return AuthResult.failure(_linkErrorMessage(e));
@@ -446,7 +485,7 @@ class AuthService {
       case 'popup-closed-by-user':
         return 'Sign-in was cancelled.';
       default:
-        return e.message ?? 'Could not create your account. Try again.';
+        return _failed(e, 'Could not create your account. Please try again.');
     }
   }
 
@@ -463,7 +502,10 @@ class AuthService {
       await _auth.sendPasswordResetEmail(email: email);
       return null; // success
     } on FirebaseAuthException catch (e) {
-      return e.message ?? 'Failed to send reset email.';
+      if (e.code == 'invalid-email') {
+        return 'That email address is not formatted correctly.';
+      }
+      return _failed(e, 'The reset email was not sent. Please try again.');
     } catch (e) {
       return 'Failed to send reset email. Please try again.';
     }

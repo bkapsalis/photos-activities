@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/crash_reporting.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
@@ -84,11 +85,12 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'photo edit not saved');
       if (mounted) {
         setState(() {
           _isSaving = false;
-          _errorMessage = e.toString();
+          _errorMessage = 'Your changes were not saved. Please try again.';
         });
       }
     }

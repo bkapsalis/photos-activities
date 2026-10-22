@@ -201,68 +201,65 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
       // Everything the user actually waits on the spinner for: resizing,
       // the Storage upload and the Firestore write. One number to watch for
       // "does publishing feel slow".
-      await PerformanceService.trace(
-        'photo_upload_total',
-        () async {
-          final upload = await _imageProcessing.prepareForUpload(
-            _imageBytes!,
-            photographer: userProfile.name,
-          );
+      await PerformanceService.trace('photo_upload_total', () async {
+        final upload = await _imageProcessing.prepareForUpload(
+          _imageBytes!,
+          photographer: userProfile.name,
+        );
 
-          final imageUrl = await _storageService.uploadBytes(
-            bytes: upload,
-            category: _selectedCategory,
-            photoId: photoId,
-          );
+        final imageUrl = await _storageService.uploadBytes(
+          bytes: upload,
+          category: _selectedCategory,
+          photoId: photoId,
+        );
 
-          if (imageUrl == null) {
-            throw Exception('Failed to upload image to Firebase Storage');
-          }
+        if (imageUrl == null) {
+          throw Exception('Failed to upload image to Firebase Storage');
+        }
 
-          final decoded = await decodeImageFromList(_imageBytes!);
-          final metadata = _metadata.withFallbackSize(
-            decoded.width,
-            decoded.height,
-          );
-          decoded.dispose();
+        final decoded = await decodeImageFromList(_imageBytes!);
+        final metadata = _metadata.withFallbackSize(
+          decoded.width,
+          decoded.height,
+        );
+        decoded.dispose();
 
-          final location = Location(
-            id: 'loc_$photoId',
-            name: _locationNameController.text.trim(),
-            region: _regionController.text.trim().isNotEmpty
-                ? _regionController.text.trim()
-                : 'Bay Area, CA',
-            postCount: 1,
-            category: _selectedCategory,
-            // Mirrored onto the flat fields the map and directions already read,
-            // so a photo with GPS is plotted the moment it is uploaded.
-            latitude: metadata.latitude,
-            longitude: metadata.longitude,
-          );
+        final location = Location(
+          id: 'loc_$photoId',
+          name: _locationNameController.text.trim(),
+          region: _regionController.text.trim().isNotEmpty
+              ? _regionController.text.trim()
+              : 'Bay Area, CA',
+          postCount: 1,
+          category: _selectedCategory,
+          // Mirrored onto the flat fields the map and directions already read,
+          // so a photo with GPS is plotted the moment it is uploaded.
+          latitude: metadata.latitude,
+          longitude: metadata.longitude,
+        );
 
-          final photoPost = PhotoPost(
-            id: photoId,
-            imageUrl: imageUrl,
-            location: location,
-            user: userProfile,
-            heartCount: 0,
-            commentCount: 0,
-            aspectRatio: aspectRatio,
-            category: _selectedCategory,
-            createdAt: DateTime.now(),
-            metadata: metadata,
-          );
+        final photoPost = PhotoPost(
+          id: photoId,
+          imageUrl: imageUrl,
+          location: location,
+          user: userProfile,
+          heartCount: 0,
+          commentCount: 0,
+          aspectRatio: aspectRatio,
+          category: _selectedCategory,
+          createdAt: DateTime.now(),
+          metadata: metadata,
+        );
 
-          try {
-            return await _firestoreService.addPhoto(photoPost);
-          } catch (_) {
-            // Without its document nothing points at the file; remove it
-            // rather than leave it stranded in Storage.
-            await _storageService.deleteUploadedFile(imageUrl);
-            rethrow;
-          }
-        },
-      );
+        try {
+          return await _firestoreService.addPhoto(photoPost);
+        } catch (_) {
+          // Without its document nothing points at the file; remove it
+          // rather than leave it stranded in Storage.
+          await _storageService.deleteUploadedFile(imageUrl);
+          rethrow;
+        }
+      });
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -278,7 +275,7 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
       if (mounted) {
         setState(() {
           _isUploading = false;
-          _errorMessage = e.toString();
+          _errorMessage = 'Your photo was not uploaded. Please try again.';
         });
       }
     }

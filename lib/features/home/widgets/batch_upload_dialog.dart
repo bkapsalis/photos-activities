@@ -97,8 +97,18 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
           }
         });
       }
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Error: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'photos could not be picked',
+      );
+      if (mounted) {
+        setState(
+          () => _errorMessage =
+              'Those photos could not be opened. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isPicking = false);
     }
@@ -134,8 +144,18 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
           }
         });
       }
-    } catch (e) {
-      if (mounted) setState(() => _errorMessage = 'Error: $e');
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'photos could not be picked',
+      );
+      if (mounted) {
+        setState(
+          () => _errorMessage =
+              'Those photos could not be opened. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isPicking = false);
     }
