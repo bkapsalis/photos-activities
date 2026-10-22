@@ -21,8 +21,16 @@ class LocationChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ResponsiveLayout(
-      mobileLayout: _MobileChatSheet(locationId: locationId, locationName: locationName, onClose: onClose),
-      webLayout: _WebChatPanel(locationId: locationId, locationName: locationName, onClose: onClose),
+      mobileLayout: _MobileChatSheet(
+        locationId: locationId,
+        locationName: locationName,
+        onClose: onClose,
+      ),
+      webLayout: _WebChatPanel(
+        locationId: locationId,
+        locationName: locationName,
+        onClose: onClose,
+      ),
     );
   }
 }
@@ -32,7 +40,11 @@ class _MobileChatSheet extends StatelessWidget {
   final String? locationName;
   final VoidCallback? onClose;
 
-  const _MobileChatSheet({required this.locationId, this.locationName, this.onClose});
+  const _MobileChatSheet({
+    required this.locationId,
+    this.locationName,
+    this.onClose,
+  });
 
   void _sendMessage(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
@@ -48,7 +60,6 @@ class _MobileChatSheet extends StatelessWidget {
       user: userProfile,
       text: text,
       timestamp: 'Just now',
-      isMe: true,
     );
     await FirestoreService().sendChatMessage(locationId, msg);
   }
@@ -68,10 +79,14 @@ class _MobileChatSheet extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$displayName Chat',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const Text('Community Discussion',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text(
+              '$displayName Chat',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              'Community Discussion',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
           ],
         ),
       ),
@@ -92,20 +107,31 @@ class _MobileChatSheet extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.forum_outlined, size: 48, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.forum_outlined,
+                          size: 48,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(height: 12),
-                        Text('No messages yet in $displayName',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          'No messages yet in $displayName',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 4),
-                        const Text('Be the first to chat! 💬',
-                            style: TextStyle(color: AppColors.textSecondary)),
+                        const Text(
+                          'Be the first to chat! 💬',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
                       ],
                     ),
                   );
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     return ChatMessageBubble(message: messages[index]);
@@ -130,7 +156,11 @@ class _WebChatPanel extends StatelessWidget {
   final String? locationName;
   final VoidCallback? onClose;
 
-  const _WebChatPanel({required this.locationId, this.locationName, this.onClose});
+  const _WebChatPanel({
+    required this.locationId,
+    this.locationName,
+    this.onClose,
+  });
 
   void _sendMessage(BuildContext context, String text) async {
     final currentUser = auth.FirebaseAuth.instance.currentUser;
@@ -146,7 +176,6 @@ class _WebChatPanel extends StatelessWidget {
       user: userProfile,
       text: text,
       timestamp: 'Just now',
-      isMe: true,
     );
     await FirestoreService().sendChatMessage(locationId, msg);
   }
@@ -171,11 +200,18 @@ class _WebChatPanel extends StatelessWidget {
                   children: [
                     const Icon(Icons.forum, size: 64, color: AppColors.primary),
                     const SizedBox(height: 16),
-                    Text(displayName,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    const Text('Community Chat',
-                        style: TextStyle(color: AppColors.textSecondary)),
+                    const Text(
+                      'Community Chat',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                   ],
                 ),
               ),
@@ -193,16 +229,24 @@ class _WebChatPanel extends StatelessWidget {
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: AppColors.divider)),
+                    border: Border(
+                      bottom: BorderSide(color: AppColors.divider),
+                    ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
                           '$displayName Chat',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -225,13 +269,18 @@ class _WebChatPanel extends StatelessWidget {
                       final messages = snapshot.data ?? [];
                       if (messages.isEmpty) {
                         return const Center(
-                          child: Text('No messages yet. Be the first to chat! 💬',
-                              style: TextStyle(color: AppColors.textSecondary)),
+                          child: Text(
+                            'No messages yet. Be the first to chat! 💬',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
                         );
                       }
 
                       return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
                           return ChatMessageBubble(message: messages[index]);

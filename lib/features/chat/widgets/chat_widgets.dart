@@ -7,17 +7,24 @@ import '../../../core/widgets/shared_widgets.dart';
 class ChatMessageBubble extends StatelessWidget {
   final ChatMessage message;
 
-  const ChatMessageBubble({super.key, required this.message});
+  /// Who is reading; the signed-in user unless a test supplies one.
+  final String? viewerId;
+
+  const ChatMessageBubble({super.key, required this.message, this.viewerId});
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = auth.FirebaseAuth.instance.currentUser;
-    final isMe = message.isMe || (currentUser != null && message.user.id == currentUser.uid);
+    // Decided by who is reading, never by the stored message: the same
+    // message is its author's own and someone else's to everyone else.
+    final viewer = viewerId ?? auth.FirebaseAuth.instance.currentUser?.uid;
+    final isMe = viewer != null && message.user.id == viewer;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           if (!isMe)
             Padding(
@@ -32,7 +39,9 @@ class ChatMessageBubble extends StatelessWidget {
               ),
             ),
           Row(
-            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: isMe
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isMe) ...[
@@ -45,9 +54,14 @@ class ChatMessageBubble extends StatelessWidget {
               ],
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: isMe ? AppColors.chatBubbleMe : AppColors.chatBubbleOther,
+                    color: isMe
+                        ? AppColors.chatBubbleMe
+                        : AppColors.chatBubbleOther,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -59,7 +73,9 @@ class ChatMessageBubble extends StatelessWidget {
                     message.text,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isMe ? AppColors.chatBubbleMeText : AppColors.textPrimary,
+                      color: isMe
+                          ? AppColors.chatBubbleMeText
+                          : AppColors.textPrimary,
                       height: 1.4,
                     ),
                   ),
@@ -76,11 +92,16 @@ class ChatMessageBubble extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMe
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
               children: [
                 Text(
                   message.timestamp,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 if (message.reactionCount > 0) ...[
                   const SizedBox(width: 8),
@@ -151,7 +172,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
                   onSubmitted: (_) => _handleSend(),
                   decoration: InputDecoration(
                     hintText: widget.hintText,
-                    hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    hintStyle: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),

@@ -47,8 +47,8 @@ class UserProfile {
     final name = (user.displayName != null && user.displayName!.isNotEmpty)
         ? user.displayName!
         : (user.email != null && user.email!.isNotEmpty)
-            ? user.email!.split('@').first
-            : 'Bay Explorer';
+        ? user.email!.split('@').first
+        : 'Bay Explorer';
 
     final parts = name.trim().split(RegExp(r'\s+'));
     String initials = 'BE';
@@ -56,7 +56,9 @@ class UserProfile {
       if (parts.length >= 2 && parts.last.isNotEmpty) {
         initials = '${parts.first[0]}${parts.last[0]}'.toUpperCase();
       } else {
-        initials = parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
+        initials = parts.first
+            .substring(0, parts.first.length >= 2 ? 2 : 1)
+            .toUpperCase();
       }
     }
 
@@ -234,7 +236,6 @@ class ChatMessage {
   final String text;
   final String timestamp;
   final int reactionCount;
-  final bool isMe;
 
   const ChatMessage({
     required this.id,
@@ -242,7 +243,6 @@ class ChatMessage {
     required this.text,
     required this.timestamp,
     this.reactionCount = 0,
-    this.isMe = false,
   });
 
   factory ChatMessage.fromFirestore(DocumentSnapshot doc) {
@@ -280,7 +280,6 @@ class ChatMessage {
       text: data['text'] as String? ?? '',
       timestamp: formattedTime,
       reactionCount: (data['reactionCount'] as num?)?.toInt() ?? 0,
-      isMe: data['isMe'] as bool? ?? false,
     );
   }
 
@@ -293,7 +292,6 @@ class ChatMessage {
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'reactionCount': reactionCount,
-      'isMe': isMe,
     };
   }
 }
