@@ -27,7 +27,7 @@ plugins {
     // Instruments app start, screen render and network calls for Performance Monitoring.
     id("com.google.firebase.firebase-perf") version("2.0.2") apply false
     // END: FlutterFire Configuration
-    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
 }
 
 include(":app")
