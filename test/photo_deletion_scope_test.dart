@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bills_bay_area/core/services/photo_deletion_service.dart';
 
 Map<String, dynamic> photo({String? category, String? location}) => {
-  if (category != null) 'category': category,
-  if (location != null) 'locationName': location,
+  'category': ?category,
+  'locationName': ?location,
 };
 
 bool matches(Map<String, dynamic> data) => PhotoDeletionService.matches(

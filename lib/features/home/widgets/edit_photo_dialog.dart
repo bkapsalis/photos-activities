@@ -141,7 +141,7 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 140,
                       color: AppColors.surfaceVariant,
                       child: const Icon(

@@ -72,8 +72,8 @@ class AppNetworkImage extends StatelessWidget {
       useOldImageOnUrlChange: keepPreviousWhileLoading,
       fadeInDuration: const Duration(milliseconds: 200),
       fadeOutDuration: const Duration(milliseconds: 200),
-      placeholder: (_, __) => _ImageState(onDark: onDark),
-      errorWidget: (_, __, ___) => _ImageState(onDark: onDark, failed: true),
+      placeholder: (_, _) => _ImageState(onDark: onDark),
+      errorWidget: (_, _, _) => _ImageState(onDark: onDark, failed: true),
     );
   }
 }

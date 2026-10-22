@@ -233,7 +233,7 @@ class _AutoAspectImageState extends State<_AutoAspectImage> {
   @override
   void initState() {
     super.initState();
-    _listener = ImageStreamListener(_onImageResolved, onError: (_, __) {});
+    _listener = ImageStreamListener(_onImageResolved, onError: (_, _) {});
   }
 
   @override

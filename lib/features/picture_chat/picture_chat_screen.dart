@@ -124,7 +124,7 @@ class _MobilePictureChat extends StatelessWidget {
                     Image.network(
                       photo.imageUrl,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         color: AppColors.surfaceVariant,
                         child: const Icon(
                           Icons.landscape,
@@ -546,7 +546,7 @@ class _WebPictureModal extends StatelessWidget {
                                 child: Image.network(
                                   photo.imageUrl,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     color: AppColors.surfaceVariant,
                                     child: const Icon(
                                       Icons.landscape,

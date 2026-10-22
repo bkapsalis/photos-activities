@@ -22,9 +22,9 @@ class FullScreenPhotoView extends StatelessWidget {
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 280),
         reverseTransitionDuration: const Duration(milliseconds: 240),
-        pageBuilder: (_, __, ___) => FullScreenPhotoView(photo: photo),
+        pageBuilder: (_, _, _) => FullScreenPhotoView(photo: photo),
         // A fade lets the Hero carry the motion; a slide would fight it.
-        transitionsBuilder: (_, animation, __, child) =>
+        transitionsBuilder: (_, animation, _, child) =>
             FadeTransition(opacity: animation, child: child),
       ),
     );
