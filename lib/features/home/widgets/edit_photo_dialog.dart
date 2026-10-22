@@ -179,6 +179,7 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                 // Location name
                 TextFormField(
                   controller: _locationNameController,
+                  inputFormatters: placeNameLimit,
                   decoration: const InputDecoration(
                     labelText: 'Spot Name',
                     border: OutlineInputBorder(),
@@ -192,6 +193,7 @@ class _EditPhotoDialogState extends State<EditPhotoDialog> {
                 // Region / City
                 TextFormField(
                   controller: _regionController,
+                  inputFormatters: placeNameLimit,
                   decoration: const InputDecoration(
                     labelText: 'Region / City (Optional)',
                     border: OutlineInputBorder(),

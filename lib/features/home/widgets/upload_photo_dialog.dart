@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/capture_location_service.dart';
+import '../../../core/services/crash_reporting.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/image_processing_service.dart';
 import '../../../core/services/performance_service.dart';
@@ -200,7 +201,7 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
       // Everything the user actually waits on the spinner for: resizing,
       // the Storage upload and the Firestore write. One number to watch for
       // "does publishing feel slow".
-      final docId = await PerformanceService.trace(
+      await PerformanceService.trace(
         'photo_upload_total',
         () async {
           final upload = await _imageProcessing.prepareForUpload(
@@ -252,11 +253,18 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
             metadata: metadata,
           );
 
-          return _firestoreService.addPhoto(photoPost);
+          try {
+            return await _firestoreService.addPhoto(photoPost);
+          } catch (_) {
+            // Without its document nothing points at the file; remove it
+            // rather than leave it stranded in Storage.
+            await _storageService.deleteUploadedFile(imageUrl);
+            rethrow;
+          }
         },
       );
 
-      if (docId != null && mounted) {
+      if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -264,10 +272,9 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
             backgroundColor: AppColors.primary,
           ),
         );
-      } else {
-        throw Exception('Failed to save photo metadata');
       }
-    } catch (e) {
+    } catch (e, stack) {
+      CrashReporting.recordError(e, stack, reason: 'photo upload failed');
       if (mounted) {
         setState(() {
           _isUploading = false;
@@ -403,6 +410,7 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                 // Region / City
                 TextFormField(
                   controller: _regionController,
+                  inputFormatters: placeNameLimit,
                   decoration: const InputDecoration(
                     labelText: 'Region / City (Optional)',
                     hintText: 'e.g. Los Gatos, CA',
@@ -492,7 +500,11 @@ class PhotoLocationStatus extends StatelessWidget {
         'Location: where you are now',
         AppColors.primaryDark,
       ),
-      _ => (Icons.location_on, 'Location from the photo', AppColors.primaryDark),
+      _ => (
+        Icons.location_on,
+        'Location from the photo',
+        AppColors.primaryDark,
+      ),
     };
     return Padding(
       padding: const EdgeInsets.only(top: 8),

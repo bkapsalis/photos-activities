@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../services/firestore_service.dart';
+
+/// The longest place name or region the rules accept (newPhoto and
+/// ownerDetailsEdit in firestore.rules). Typing stops there rather than
+/// letting an upload be refused at the end.
+const maxPlaceNameLength = 100;
+final placeNameLimit = [LengthLimitingTextInputFormatter(maxPlaceNameLength)];
 
 /// Margins around the app's form dialogs. Material's default leaves 40
 /// points each side, which on a phone with a large display size (a Pixel 7
@@ -26,10 +33,7 @@ class UserAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: Text(
         initials,
@@ -175,6 +179,7 @@ class _LocationNameFieldState extends State<LocationNameField> {
         if (_isNewEntry || locations.isEmpty) {
           return TextFormField(
             controller: widget.controller,
+            inputFormatters: placeNameLimit,
             decoration: InputDecoration(
               labelText: 'Location Name',
               hintText: 'e.g. Vasona Lake, Almaden Lake',
@@ -188,8 +193,9 @@ class _LocationNameFieldState extends State<LocationNameField> {
                     )
                   : null,
             ),
-            validator: (val) =>
-                (val == null || val.trim().isEmpty) ? 'Please enter a location name' : null,
+            validator: (val) => (val == null || val.trim().isEmpty)
+                ? 'Please enter a location name'
+                : null,
           );
         }
 
@@ -219,8 +225,9 @@ class _LocationNameFieldState extends State<LocationNameField> {
               child: Text('+ Add new location'),
             ),
           ],
-          validator: (val) =>
-              (val == null || val.isEmpty) ? 'Please select or add a location' : null,
+          validator: (val) => (val == null || val.isEmpty)
+              ? 'Please select or add a location'
+              : null,
           onChanged: (val) {
             if (val == _addNewValue) {
               setState(() => _isNewEntry = true);

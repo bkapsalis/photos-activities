@@ -1,10 +1,33 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import 'analytics_service.dart';
+import 'crash_reporting.dart';
 import 'performance_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  /// Reads each document on its own, skipping (and reporting) any that
+  /// cannot be read, rather than failing the whole list. One malformed
+  /// comment must not hide every other comment on the photo.
+  static List<T> _parseEach<T>(
+    Iterable<DocumentSnapshot> docs,
+    T Function(DocumentSnapshot doc) parse,
+  ) {
+    final items = <T>[];
+    for (final doc in docs) {
+      try {
+        items.add(parse(doc));
+      } catch (error, stack) {
+        CrashReporting.recordError(
+          error,
+          stack,
+          reason: 'unreadable document ${doc.reference.path}',
+        );
+      }
+    }
+    return items;
+  }
 
   // ── Photo Operations ───────────────────────────────────
 
@@ -14,8 +37,7 @@ class FirestoreService {
   Stream<List<PhotoPost>> streamPhotosByCategory(String category) {
     final target = category.trim().toLowerCase();
     return _photosRef.snapshots().map((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => PhotoPost.fromFirestore(doc))
+      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
           .where((photo) => photo.category.trim().toLowerCase() == target)
           .toList();
       list.sort(
@@ -30,9 +52,7 @@ class FirestoreService {
   /// Stream all photos (no filter)
   Stream<List<PhotoPost>> streamAllPhotos() {
     return _photosRef.snapshots().map((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => PhotoPost.fromFirestore(doc))
-          .toList();
+      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore);
       list.sort(
         (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
           a.createdAt ?? DateTime.now(),
@@ -50,8 +70,7 @@ class FirestoreService {
     final targetCat = category.trim().toLowerCase();
     final targetLoc = locationName.trim().toLowerCase();
     return _photosRef.snapshots().map((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => PhotoPost.fromFirestore(doc))
+      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
           .where(
             (photo) =>
                 photo.category.trim().toLowerCase() == targetCat &&
@@ -97,22 +116,18 @@ class FirestoreService {
     }
   }
 
-  /// Add a new photo post
-  Future<String?> addPhoto(PhotoPost photo) async {
-    try {
-      final docRef = await PerformanceService.trace(
-        'firestore_add_photo',
-        () => _photosRef.add(photo.toFirestore()),
-      );
-      AnalyticsService.photoUploaded(
-        category: photo.category,
-        hasLocation: photo.location.hasCoordinates,
-      );
-      return docRef.id;
-    } catch (e) {
-      print('Error adding photo: $e');
-      return null;
-    }
+  /// Adds a photo post and returns its id. Throws if it could not be saved,
+  /// so a caller cannot mistake a failure for a success.
+  Future<String> addPhoto(PhotoPost photo) async {
+    final docRef = await PerformanceService.trace(
+      'firestore_add_photo',
+      () => _photosRef.add(photo.toFirestore()),
+    );
+    AnalyticsService.photoUploaded(
+      category: photo.category,
+      hasLocation: photo.location.hasCoordinates,
+    );
+    return docRef.id;
   }
 
   /// Update heart count
@@ -150,17 +165,14 @@ class FirestoreService {
     return _locationsRef
         .where('category', isEqualTo: category)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => Location.fromFirestore(doc)).toList(),
-        );
+        .map((snapshot) => _parseEach(snapshot.docs, Location.fromFirestore));
   }
 
   /// Get all locations
   Future<List<Location>> getLocations() async {
     try {
       final snapshot = await _locationsRef.get();
-      return snapshot.docs.map((doc) => Location.fromFirestore(doc)).toList();
+      return _parseEach(snapshot.docs, Location.fromFirestore);
     } catch (e) {
       print('Error fetching locations: $e');
       return [];
@@ -178,9 +190,7 @@ class FirestoreService {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ChatMessage.fromFirestore(doc))
-              .toList(),
+          (snapshot) => _parseEach(snapshot.docs, ChatMessage.fromFirestore),
         );
   }
 
@@ -199,10 +209,7 @@ class FirestoreService {
     return _commentsRef(photoId)
         .orderBy('timestamp', descending: false)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map((doc) => Comment.fromFirestore(doc)).toList(),
-        );
+        .map((snapshot) => _parseEach(snapshot.docs, Comment.fromFirestore));
   }
 
   /// Adds a comment to a photo and counts it, as one write: either both

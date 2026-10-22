@@ -823,6 +823,7 @@ class _CommentTile extends StatelessWidget {
         content: TextField(
           controller: controller,
           maxLines: 3,
+          maxLength: maxPostLength,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
             hintText: 'Update your comment...',

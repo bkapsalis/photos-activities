@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'folder_picker.dart' as folder_picker;
+import 'crash_reporting.dart';
 import 'media_location_access.dart';
 
 class PickedFileData {
@@ -98,6 +99,22 @@ class StorageService {
     } catch (e) {
       print('Error uploading XFile: $e');
       return null;
+    }
+  }
+
+  /// Removes a file this app has just uploaded, by its download URL, when
+  /// the photo it belongs to could not be saved: with no document pointing
+  /// at it, nothing would ever show or delete it. Best effort: a failure is
+  /// reported, never thrown, so it cannot hide the error that led here.
+  Future<void> deleteUploadedFile(String downloadUrl) async {
+    try {
+      await _storage.refFromURL(downloadUrl).delete();
+    } catch (error, stack) {
+      CrashReporting.recordError(
+        error,
+        stack,
+        reason: 'could not remove an upload whose photo was not saved',
+      );
     }
   }
 

@@ -38,12 +38,6 @@ service cloud.firestore {
       return signedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    // An owner may edit their own document but not give it away.
-    function ownerEditKeepsOwner() {
-      return ownedByCaller(resource.data)
-        && request.resource.data.userId == resource.data.userId;
-    }
-
     function onlyChanges(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -53,12 +47,124 @@ service cloud.firestore {
       return request.resource.data[field] == resource.data.get(field, 0) + delta;
     }
 
+    // ── What a post may contain ────────────────────────
+    // Photos, comments and chat messages all carry their author's name,
+    // initials and avatar colour, copied in by the app. Without these checks
+    // a caller could write anything there: another person's name (the
+    // moderator's included), text of any length, a made-up time, a head
+    // start on likes, or a field of the wrong type, which the app cannot
+    // read and which would stop a whole comment thread from loading.
+
+    // The name must be one the app would show for the caller: their guest
+    // name ("Guest" and the first four characters of their uid), the name on
+    // their account, the part of their email before the @, or the app's
+    // fallback. Keep in sync with UserProfile.fromFirebaseUser.
+    function authorNameOk(name) {
+      let token = request.auth.token;
+      return name is string && name.size() > 0 && name.size() <= 80
+        && ((name.matches('Guest [A-Za-z0-9]{4}')
+              && request.auth.uid.matches(name.split(' ')[1] + '.*'))
+          || name == token.get('name', '')
+          || name == token.get('email', '').split('@')[0]
+          || name == 'Bay Explorer');
+    }
+
+    function validAuthor(d) {
+      return authorNameOk(d.userName)
+        && d.userInitials is string && d.userInitials.size() <= 3
+        && d.userAvatarColor is int;
+    }
+
+    // Keep the limit in sync with maxPostLength in chat_widgets.dart.
+    function validText(text) {
+      return text is string && text.trim().size() > 0 && text.size() <= 2000;
+    }
+
+    // A new comment or chat message: only the fields the app writes, sent as
+    // the caller under a name that is theirs, stamped with the server's own
+    // time, and starting from zero on its counter.
+    function newPost(counterField) {
+      let d = request.resource.data;
+      return createdAsSelf()
+        && d.keys().hasOnly(['userId', 'userName', 'userInitials',
+            'userAvatarColor', 'text', 'timestamp', counterField])
+        && d.keys().hasAll(['userId', 'userName', 'userInitials',
+            'userAvatarColor', 'text', 'timestamp'])
+        && validAuthor(d)
+        && validText(d.text)
+        && d.timestamp == request.time
+        && d.get(counterField, 0) == 0;
+    }
+
+    // An author may change the text of what they wrote, or, after a guest
+    // registers, the name it is signed with. Never who wrote it or when.
+    function authorEdit() {
+      let d = request.resource.data;
+      return ownedByCaller(resource.data)
+        && ((onlyChanges(['text']) && validText(d.text))
+          || (onlyChanges(['userName', 'userInitials', 'userAvatarColor'])
+              && validAuthor(d)));
+    }
+
+    function optionalString(v, max) {
+      return v == null || (v is string && v.size() <= max);
+    }
+
+    function optionalNumber(v) {
+      return v == null || v is number;
+    }
+
+    // A new photo: the fields PhotoPost.toFirestore writes, under the
+    // uploader's own name, stamped with the server's time, with no likes or
+    // comments yet.
+    function newPhoto() {
+      let d = request.resource.data;
+      return createdAsSelf()
+        && d.keys().hasOnly(['imageUrl', 'locationId', 'locationName',
+            'locationRegion', 'locationLat', 'locationLng', 'category',
+            'userId', 'userName', 'userInitials', 'userAvatarColor',
+            'heartCount', 'commentCount', 'aspectRatio', 'createdAt',
+            'metadata'])
+        && validAuthor(d)
+        && d.imageUrl is string && d.imageUrl.size() <= 2048
+        && d.locationName is string && d.locationName.size() <= 100
+        && optionalString(d.get('locationRegion', null), 100)
+        && optionalString(d.get('locationId', null), 200)
+        && d.category is string && d.category.size() <= 60
+        && optionalNumber(d.get('locationLat', null))
+        && optionalNumber(d.get('locationLng', null))
+        && d.aspectRatio is number
+        && (d.get('metadata', null) == null || d.metadata is map)
+        && d.get('heartCount', 0) == 0
+        && d.get('commentCount', 0) == 0
+        && d.createdAt == request.time;
+    }
+
+    // What an uploader may change on their own photo afterwards: the edit
+    // dialog's fields, and nothing that counts likes or comments.
+    function ownerDetailsEdit() {
+      let d = request.resource.data;
+      return ownedByCaller(resource.data)
+        && onlyChanges(['locationName', 'locationRegion', 'category'])
+        && d.locationName is string && d.locationName.size() <= 100
+        && optionalString(d.get('locationRegion', null), 100)
+        && d.category is string && d.category.size() <= 60;
+    }
+
+    // A comment must be counted on its photo in the same write, so the
+    // count shown on the photo always matches the thread.
+    function photoCommentCountMoves(photoId, delta) {
+      let path = /databases/$(database)/documents/photos/$(photoId);
+      return getAfter(path).data.get('commentCount', 0)
+        == get(path).data.get('commentCount', 0) + delta;
+    }
+
     // ── Photos ─────────────────────────────────────────
     match /photos/{photoId} {
       allow read: if true;
-      allow create: if createdAsSelf() && (isAdmin() || uploadsOpen());
+      allow create: if newPhoto() && (isAdmin() || uploadsOpen());
       allow update: if isAdmin()
-        || ownerEditKeepsOwner()
+        || ownerDetailsEdit()
         // Anyone signed in can like a photo, one step at a time...
         || (signedIn() && onlyChanges(['heartCount'])
             && counterMovedBy('heartCount', 1))
@@ -87,17 +193,18 @@ service cloud.firestore {
     // ── Chat Messages (Location Chat) ──────────────────
     match /chats/{locationId}/messages/{messageId} {
       allow read: if true;
-      allow create: if createdAsSelf();
-      // Owner updates cover renaming a guest's messages after they register.
-      allow update: if isAdmin() || ownerEditKeepsOwner();
+      allow create: if newPost('reactionCount');
+      // Author updates cover renaming a guest's messages after they register.
+      allow update: if isAdmin() || authorEdit();
       allow delete: if isAdmin() || ownedByCaller(resource.data);
     }
 
     // ── Comments (Picture Chat) ────────────────────────
     match /comments/{photoId}/messages/{commentId} {
       allow read: if true;
-      allow create: if createdAsSelf();
-      allow update: if isAdmin() || ownerEditKeepsOwner();
+      allow create: if newPost('heartCount')
+        && photoCommentCountMoves(photoId, 1);
+      allow update: if isAdmin() || authorEdit();
       // A photo's owner may clear its comments: deleting a photo removes its
       // thread first, and that thread holds other people's comments.
       allow delete: if isAdmin()

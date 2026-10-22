@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../../core/data/mock_data.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/crash_reporting.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/image_processing_service.dart';
 import '../../../core/services/performance_service.dart';
@@ -231,10 +232,18 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
             metadata: metadata,
           );
 
-          await _firestoreService.addPhoto(photoPost);
+          try {
+            await _firestoreService.addPhoto(photoPost);
+          } catch (_) {
+            // Without its document nothing points at the file; remove it
+            // rather than leave it stranded in Storage.
+            await _storageService.deleteUploadedFile(imageUrl);
+            rethrow;
+          }
         });
         if (mounted) setState(() => _uploadedCount++);
-      } catch (e) {
+      } catch (e, stack) {
+        CrashReporting.recordError(e, stack, reason: 'batch upload failed');
         if (mounted) setState(() => _failedCount++);
       }
     }
@@ -431,6 +440,7 @@ class _BatchUploadDialogState extends State<BatchUploadDialog> {
                 // Region
                 TextFormField(
                   controller: _regionController,
+                  inputFormatters: placeNameLimit,
                   decoration: const InputDecoration(
                     labelText: 'Region / City (Optional)',
                     hintText: 'e.g. Los Gatos, CA',

@@ -24,18 +24,42 @@ const env = await initializeTestEnvironment({
   storage: { rules: readFileSync(new URL('storage.rules', root), 'utf8') },
 });
 
-const ADMIN = { email: 'bkapsalis@gmail.com', email_verified: true };
-const alice = () => env.authenticatedContext('alice');
-const bob = () => env.authenticatedContext('bob');
-const guest = () => env.authenticatedContext('guest', { firebase: { sign_in_provider: 'anonymous' } });
+// Tokens carry the claims the app's names come from: `name` for a Google
+// account, `email` for one registered with a password, neither for a guest.
+const ADMIN = { email: 'bkapsalis@gmail.com', email_verified: true, name: 'Bill Kapsalis' };
+const alice = () => env.authenticatedContext('alice', { name: 'Alice Lee' });
+const bob = () => env.authenticatedContext('bob', { email: 'bob@example.com' });
+const guest = () => env.authenticatedContext('g7xQ2', { firebase: { sign_in_provider: 'anonymous' } });
 const admin = () => env.authenticatedContext('bill', ADMIN);
 const fakeAdmin = () => env.authenticatedContext('mallory', { email: 'bkapsalis@gmail.com', email_verified: false });
+
+// The names the app would sign each account's posts with.
+const NAMES = { alice: 'Alice Lee', bob: 'bob', g7xQ2: 'Guest g7xQ', bill: 'Bill Kapsalis', mallory: 'Mallory' };
+const author = (uid, name = NAMES[uid] ?? uid) => ({
+  userId: uid, userName: name, userInitials: 'AB', userAvatarColor: 4283215696,
+});
 const anon = () => env.unauthenticatedContext();
 
+// A photo as PhotoPost.toFirestore writes it.
 const photo = (owner, extra = {}) => ({
-  imageUrl: 'x', userId: owner, userName: owner, category: 'Museums - Historic Sites',
-  locationName: 'Forbes Mill Museum', heartCount: 0, commentCount: 0, ...extra,
+  imageUrl: 'https://example.com/x.jpg', locationId: 'loc_1', locationName: 'Forbes Mill Museum',
+  locationRegion: 'Los Gatos, CA', locationLat: null, locationLng: null,
+  category: 'Museums - Historic Sites', ...author(owner), heartCount: 0, commentCount: 0,
+  aspectRatio: 1.5, createdAt: serverTimestamp(), metadata: { hasLocation: false }, ...extra,
 });
+
+// A comment or chat message as the app writes it.
+const post = (uid, extra = {}) => ({ ...author(uid), text: 'Lovely spot', timestamp: serverTimestamp(), ...extra });
+
+// Posting a comment means adding it and counting it on its photo, in one
+// batch, the way FirestoreService.addComment does.
+function commentBatch(ctx, photoId, data, countBy = 1) {
+  const db = ctx.firestore();
+  const b = writeBatch(db);
+  b.set(doc(collection(db, `comments/${photoId}/messages`)), data);
+  if (countBy) b.update(doc(db, `photos/${photoId}`), { commentCount: increment(countBy) });
+  return b.commit();
+}
 
 let pass = 0, fail = 0;
 async function check(name, fn) {
@@ -75,7 +99,7 @@ await check('anyone can read the upload switch', async () => {
 });
 await reset();
 await check('with no switch, a user cannot create a photo', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice'))));
-await check('with no switch, a guest cannot create a photo', () => assertFails(addDoc(collection(guest().firestore(), 'photos'), photo('guest'))));
+await check('with no switch, a guest cannot create a photo', () => assertFails(addDoc(collection(guest().firestore(), 'photos'), photo('g7xQ2'))));
 await check('with no switch, admin can create a photo', () => assertSucceeds(addDoc(collection(admin().firestore(), 'photos'), photo('bill'))));
 await check('unverified admin email cannot create a photo', () => assertFails(addDoc(collection(fakeAdmin().firestore(), 'photos'), photo('mallory'))));
 await check('admin still cannot create a photo in someone else\'s name', () => assertFails(addDoc(collection(admin().firestore(), 'photos'), photo('alice'))));
@@ -90,7 +114,7 @@ await check('admin can open and close uploads', async () => {
 });
 await check('closed uploads still allow likes and comments', async () => {
   await assertSucceeds(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1) }));
-  await assertSucceeds(addDoc(collection(guest().firestore(), 'comments/p1/messages'), { userId: 'guest', text: 'nice' }));
+  await assertSucceeds(commentBatch(guest(), 'p1', post('g7xQ2')));
 });
 
 console.log('Firestore — photos (uploads open)');
@@ -98,8 +122,13 @@ await reset();
 await openUploads();
 await check('signed-out user cannot create a photo', () => assertFails(addDoc(collection(anon().firestore(), 'photos'), photo('x'))));
 await check('user can create a photo as themselves', () => assertSucceeds(addDoc(collection(alice().firestore(), 'photos'), photo('alice'))));
-await check('guest can create a photo as themselves', () => assertSucceeds(addDoc(collection(guest().firestore(), 'photos'), photo('guest'))));
+await check('guest can create a photo as themselves', () => assertSucceeds(addDoc(collection(guest().firestore(), 'photos'), photo('g7xQ2'))));
 await check('cannot create a photo in someone else\'s name', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('bob'))));
+await check('a new photo cannot start with likes', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice', { heartCount: 50 }))));
+await check('a new photo cannot carry its own date', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice', { createdAt: new Date('2020-01-01') }))));
+await check('a new photo cannot add fields the app does not write', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice', { featured: true }))));
+await check('a new photo cannot be signed with another name', () => assertFails(addDoc(collection(alice().firestore(), 'photos'), photo('alice', { userName: 'Bill Kapsalis' }))));
+await check('owner cannot set their own like count', () => assertFails(updateDoc(doc(alice().firestore(), 'photos/p1'), { heartCount: 99 })));
 await check('owner can edit details', () => assertSucceeds(updateDoc(doc(alice().firestore(), 'photos/p1'), { locationName: 'New', category: 'Hiking Areas', locationRegion: 'X' })));
 await check('owner cannot give the photo away', () => assertFails(updateDoc(doc(alice().firestore(), 'photos/p1'), { userId: 'bob' })));
 await check('non-owner cannot edit details', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { locationName: 'Hacked' })));
@@ -142,9 +171,27 @@ await check('only admin can write locations', async () => {
 
 console.log('Firestore — comments & chat');
 await reset();
-await check('user can comment as themselves', () => assertSucceeds(addDoc(collection(bob().firestore(), 'comments/p1/messages'), { userId: 'bob', text: 'x', timestamp: serverTimestamp() })));
-await check('cannot comment as someone else', () => assertFails(addDoc(collection(bob().firestore(), 'comments/p1/messages'), { userId: 'alice', text: 'x' })));
+await check('user can comment as themselves', () => assertSucceeds(commentBatch(bob(), 'p1', post('bob'))));
+await check('cannot comment as someone else', () => assertFails(commentBatch(bob(), 'p1', post('alice'))));
 await check('signed-out user cannot comment', () => assertFails(addDoc(collection(anon().firestore(), 'comments/p1/messages'), { userId: 'x', text: 'x' })));
+await check('a comment must be counted on its photo in the same write', () => assertFails(commentBatch(bob(), 'p1', post('bob'), 0)));
+await check('a comment cannot be signed with the moderator\'s name', () => assertFails(commentBatch(bob(), 'p1', post('bob', { userName: 'Bill Kapsalis' }))));
+await check('a guest comments under their own guest name', () => assertSucceeds(commentBatch(guest(), 'p1', post('g7xQ2'))));
+await check('a guest cannot use another guest\'s name', () => assertFails(commentBatch(guest(), 'p1', post('g7xQ2', { userName: 'Guest zzzz' }))));
+await check('the moderator signs as themselves', () => assertSucceeds(commentBatch(admin(), 'p1', post('bill'))));
+await check('a comment cannot be empty', () => assertFails(commentBatch(bob(), 'p1', post('bob', { text: '   ' }))));
+await check('a comment cannot be longer than 2000 characters', () => assertFails(commentBatch(bob(), 'p1', post('bob', { text: 'x'.repeat(2001) }))));
+await check('a comment of exactly 2000 characters is fine', () => assertSucceeds(commentBatch(bob(), 'p1', post('bob', { text: 'x'.repeat(2000) }))));
+await check('comment text must be text', () => assertFails(commentBatch(bob(), 'p1', post('bob', { text: 42 }))));
+await check('a comment cannot carry its own time', () => assertFails(commentBatch(bob(), 'p1', post('bob', { timestamp: new Date('2030-01-01') }))));
+await check('a comment cannot start with likes', () => assertFails(commentBatch(bob(), 'p1', post('bob', { heartCount: 9 }))));
+await check('a comment cannot add fields the app does not write', () => assertFails(commentBatch(bob(), 'p1', post('bob', { isMe: true }))));
+await check('an author cannot change who wrote a comment or when', async () => {
+  await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { userId: 'alice' }));
+  await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { timestamp: new Date('2030-01-01') }));
+});
+await check('an edit cannot make a comment empty', () => assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { text: '' })));
+await check('an author cannot rename their posts to someone else', () => assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { userName: 'Bill Kapsalis', userInitials: 'BK', userAvatarColor: 1 })));
 await check('author can edit their comment', () => assertSucceeds(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { text: 'edited' })));
 await check('others cannot edit a comment', () => assertFails(updateDoc(doc(alice().firestore(), 'comments/p2/messages/c-bob'), { text: 'x' })));
 await check('photo owner can delete others\' comments on their photo', () => assertSucceeds(deleteDoc(doc(alice().firestore(), 'comments/p1/messages/c-bob'))));
@@ -155,10 +202,13 @@ await check('third party cannot delete a comment', async () => {
 });
 await check('author can delete own comment', () => assertSucceeds(deleteDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'))));
 await check('author can rename themselves on their messages (guest upgrade)', () =>
-  assertSucceeds(updateDoc(doc(bob().firestore(), 'chats/loc1/messages/m-bob'), { userName: 'Bob', userInitials: 'B', userAvatarColor: 1 })));
+  assertSucceeds(updateDoc(doc(bob().firestore(), 'chats/loc1/messages/m-bob'), { userName: 'bob', userInitials: 'B', userAvatarColor: 1 })));
 await check('cannot rename someone else\'s chat message', () =>
   assertFails(updateDoc(doc(alice().firestore(), 'chats/loc1/messages/m-bob'), { userName: 'x' })));
 await check('chat message must be sent as self', () => assertFails(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), { userId: 'bob', text: 'x' })));
+await check('a chat message as the app writes it is accepted', () => assertSucceeds(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), post('alice', { reactionCount: 0 }))));
+await check('a chat message cannot carry the old isMe flag', () => assertFails(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), post('alice', { isMe: true }))));
+await check('a chat message cannot be signed with another name', () => assertFails(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), post('alice', { userName: 'bob' }))));
 
 console.log('Storage');
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);

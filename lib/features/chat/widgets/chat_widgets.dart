@@ -1,8 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
+
+/// The longest comment or chat message the rules accept (validText in
+/// firestore.rules). Typing stops there rather than having the send refused.
+const maxPostLength = 2000;
 
 class ChatMessageBubble extends StatelessWidget {
   final ChatMessage message;
@@ -180,6 +185,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 ),
                 child: TextField(
                   controller: _controller,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(maxPostLength),
+                  ],
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _handleSend(),
                   decoration: InputDecoration(
