@@ -8,6 +8,7 @@ import '../../core/services/photo_deletion_service.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/live_data.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
@@ -20,28 +21,42 @@ class PictureChatScreen extends StatelessWidget {
 
   const PictureChatScreen({super.key, required this.photoId, this.onClose});
 
+  Widget _withBackButton(BuildContext context, String title, Widget body) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: onClose ?? () => Navigator.pop(context),
+        ),
+        title: Text(title),
+      ),
+      body: body,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<PhotoPost?>(
-      future: FirestoreService().getPhoto(photoId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final photo = snapshot.data;
+    // Live, so a like, an edit or a new comment count shows at once, here
+    // and on the feed behind it.
+    return LiveData<PhotoPost?>(
+      identity: photoId,
+      stream: () => FirestoreService().streamPhoto(photoId),
+      errorMessage: 'This photo could not be loaded.',
+      loading: const Scaffold(body: Center(child: CircularProgressIndicator())),
+      errorBuilder: (context, retry) => _withBackButton(
+        context,
+        'Photo',
+        LoadErrorView(
+          message: 'This photo could not be loaded.',
+          onRetry: retry,
+        ),
+      ),
+      builder: (context, photo) {
         if (photo == null) {
-          return Scaffold(
-            appBar: AppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onClose ?? () => Navigator.pop(context),
-              ),
-              title: const Text('Photo Not Found'),
-            ),
-            body: const Center(
+          return _withBackButton(
+            context,
+            'Photo Not Found',
+            const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -131,17 +146,11 @@ class _MobilePictureChat extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     const ColoredBox(color: Colors.black),
-                    Image.network(
+                    AppNetworkImage(
                       photo.imageUrl,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => Container(
-                        color: AppColors.surfaceVariant,
-                        child: const Icon(
-                          Icons.landscape,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
+                      // Shown on black: dark loading and error states.
+                      onDark: true,
                     ),
                     // Back button
                     Positioned(
@@ -497,17 +506,11 @@ class _WebPictureModal extends StatelessWidget {
                             children: [
                               Container(
                                 color: Colors.black,
-                                child: Image.network(
+                                child: AppNetworkImage(
                                   photo.imageUrl,
                                   fit: BoxFit.contain,
-                                  errorBuilder: (_, _, _) => Container(
-                                    color: AppColors.surfaceVariant,
-                                    child: const Icon(
-                                      Icons.landscape,
-                                      size: 64,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
+                                  // Shown on black: dark loading and error states.
+                                  onDark: true,
                                 ),
                               ),
                               Positioned(

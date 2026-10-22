@@ -104,17 +104,16 @@ class FirestoreService {
     });
   }
 
-  /// Get a single photo by ID
-  Future<PhotoPost?> getPhoto(String photoId) async {
-    try {
-      final doc = await _photosRef.doc(photoId).get();
-      if (!doc.exists) return null;
-      return PhotoPost.fromFirestore(doc);
-    } catch (e, stack) {
-      CrashReporting.recordError(e, stack, reason: 'fetching photo');
-      return null;
-    }
-  }
+  /// One photo, live, so likes and edits show as they happen. Null when it
+  /// does not exist (deleted, or an old link); a document that cannot be
+  /// read is reported and treated the same way. A failure to load at all
+  /// arrives as a stream error, never as null, so "deleted" and "could not
+  /// load" stay distinguishable.
+  Stream<PhotoPost?> streamPhoto(String photoId) =>
+      _photosRef.doc(photoId).snapshots().map((doc) {
+        if (!doc.exists) return null;
+        return _parseEach([doc], PhotoPost.fromFirestore).firstOrNull;
+      });
 
   /// Adds a photo post and returns its id. Throws if it could not be saved,
   /// so a caller cannot mistake a failure for a success.

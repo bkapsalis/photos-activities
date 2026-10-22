@@ -78,4 +78,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('value back'), findsOneWidget);
   });
+
+  testWidgets('null is an answer for a nullable stream, not "loading"', (
+    tester,
+  ) async {
+    final photo = StreamController<String?>();
+    addTearDown(photo.close);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveData<String?>(
+          stream: () => photo.stream,
+          errorMessage: 'This photo could not be loaded.',
+          builder: (context, value) => Text(value ?? 'not found'),
+        ),
+      ),
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    photo.add(null);
+    await tester.pumpAndSettle();
+    expect(find.text('not found'), findsOneWidget);
+  });
 }

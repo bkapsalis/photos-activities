@@ -31,6 +31,9 @@ class LiveData<T> extends StatefulWidget {
   /// Shown in place of the full error view where space is tight.
   final Widget Function(BuildContext context, VoidCallback retry)? errorBuilder;
 
+  /// Shown until the first data arrives; a centred spinner by default.
+  final Widget? loading;
+
   const LiveData({
     super.key,
     required this.stream,
@@ -38,6 +41,7 @@ class LiveData<T> extends StatefulWidget {
     required this.errorMessage,
     this.identity,
     this.errorBuilder,
+    this.loading,
   });
 
   @override
@@ -73,10 +77,14 @@ class _LiveDataState<T> extends State<LiveData<T>> {
           return widget.errorBuilder?.call(context, _retry) ??
               LoadErrorView(message: widget.errorMessage, onRetry: _retry);
         }
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+        // Waiting, rather than !hasData: for a nullable T, null is a real
+        // answer (a photo that does not exist) and must be shown as one.
+        if (snapshot.connectionState == ConnectionState.waiting ||
+            (!snapshot.hasData && null is! T)) {
+          return widget.loading ??
+              const Center(child: CircularProgressIndicator());
         }
-        return widget.builder(context, snapshot.requireData);
+        return widget.builder(context, snapshot.data as T);
       },
     );
   }
