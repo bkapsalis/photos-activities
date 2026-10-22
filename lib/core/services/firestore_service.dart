@@ -13,48 +13,56 @@ class FirestoreService {
   /// Stream all photos for a category (case-insensitive), ordered by newest first
   Stream<List<PhotoPost>> streamPhotosByCategory(String category) {
     final target = category.trim().toLowerCase();
-    return _photosRef
-        .snapshots()
-        .map((snapshot) {
+    return _photosRef.snapshots().map((snapshot) {
       final list = snapshot.docs
           .map((doc) => PhotoPost.fromFirestore(doc))
           .where((photo) => photo.category.trim().toLowerCase() == target)
           .toList();
-      list.sort((a, b) => (b.createdAt ?? DateTime.now())
-          .compareTo(a.createdAt ?? DateTime.now()));
+      list.sort(
+        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+          a.createdAt ?? DateTime.now(),
+        ),
+      );
       return list;
     });
   }
 
   /// Stream all photos (no filter)
   Stream<List<PhotoPost>> streamAllPhotos() {
-    return _photosRef
-        .snapshots()
-        .map((snapshot) {
+    return _photosRef.snapshots().map((snapshot) {
       final list = snapshot.docs
           .map((doc) => PhotoPost.fromFirestore(doc))
           .toList();
-      list.sort((a, b) => (b.createdAt ?? DateTime.now())
-          .compareTo(a.createdAt ?? DateTime.now()));
+      list.sort(
+        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+          a.createdAt ?? DateTime.now(),
+        ),
+      );
       return list;
     });
   }
 
   /// Stream photos filtered by category AND location name (case-insensitive)
-  Stream<List<PhotoPost>> streamPhotosByLocation(String category, String locationName) {
+  Stream<List<PhotoPost>> streamPhotosByLocation(
+    String category,
+    String locationName,
+  ) {
     final targetCat = category.trim().toLowerCase();
     final targetLoc = locationName.trim().toLowerCase();
-    return _photosRef
-        .snapshots()
-        .map((snapshot) {
+    return _photosRef.snapshots().map((snapshot) {
       final list = snapshot.docs
           .map((doc) => PhotoPost.fromFirestore(doc))
-          .where((photo) =>
-              photo.category.trim().toLowerCase() == targetCat &&
-              photo.location.name.trim().toLowerCase() == targetLoc)
+          .where(
+            (photo) =>
+                photo.category.trim().toLowerCase() == targetCat &&
+                photo.location.name.trim().toLowerCase() == targetLoc,
+          )
           .toList();
-      list.sort((a, b) => (b.createdAt ?? DateTime.now())
-          .compareTo(a.createdAt ?? DateTime.now()));
+      list.sort(
+        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+          a.createdAt ?? DateTime.now(),
+        ),
+      );
       return list;
     });
   }
@@ -62,9 +70,7 @@ class FirestoreService {
   /// Stream distinct location names for a category (derived from photos)
   Stream<List<String>> streamDistinctLocations(String category) {
     final target = category.trim().toLowerCase();
-    return _photosRef
-        .snapshots()
-        .map((snapshot) {
+    return _photosRef.snapshots().map((snapshot) {
       final locations = <String>{};
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
@@ -144,9 +150,10 @@ class FirestoreService {
     return _locationsRef
         .where('category', isEqualTo: category)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Location.fromFirestore(doc))
-            .toList());
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => Location.fromFirestore(doc)).toList(),
+        );
   }
 
   /// Get all locations
@@ -170,9 +177,11 @@ class FirestoreService {
     return _chatMessagesRef(locationId)
         .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => ChatMessage.fromFirestore(doc))
-            .toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => ChatMessage.fromFirestore(doc))
+              .toList(),
+        );
   }
 
   /// Send a chat message
@@ -190,33 +199,40 @@ class FirestoreService {
     return _commentsRef(photoId)
         .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Comment.fromFirestore(doc))
-            .toList());
+        .map(
+          (snapshot) =>
+              snapshot.docs.map((doc) => Comment.fromFirestore(doc)).toList(),
+        );
   }
 
-  /// Add a comment to a photo
+  /// Adds a comment to a photo and counts it, as one write: either both
+  /// happen or neither does, so the count shown on the photo cannot drift.
   Future<void> addComment(String photoId, Comment comment) async {
-    await _commentsRef(photoId).add(comment.toFirestore());
+    final batch = _db.batch()
+      ..set(_commentsRef(photoId).doc(), comment.toFirestore())
+      ..update(_photosRef.doc(photoId), {
+        'commentCount': FieldValue.increment(1),
+      });
+    await batch.commit();
     AnalyticsService.commentPosted(photoId);
-    // Also increment comment count on the photo
-    await _photosRef.doc(photoId).update({
-      'commentCount': FieldValue.increment(1),
-    });
   }
 
   /// Update comment text
-  Future<void> updateComment(String photoId, String commentId, String newText) async {
-    await _commentsRef(photoId).doc(commentId).update({
-      'text': newText,
-    });
+  Future<void> updateComment(
+    String photoId,
+    String commentId,
+    String newText,
+  ) async {
+    await _commentsRef(photoId).doc(commentId).update({'text': newText});
   }
 
-  /// Delete a comment
+  /// Deletes a comment and uncounts it, as one write.
   Future<void> deleteComment(String photoId, String commentId) async {
-    await _commentsRef(photoId).doc(commentId).delete();
-    await _photosRef.doc(photoId).update({
-      'commentCount': FieldValue.increment(-1),
-    });
+    final batch = _db.batch()
+      ..delete(_commentsRef(photoId).doc(commentId))
+      ..update(_photosRef.doc(photoId), {
+        'commentCount': FieldValue.increment(-1),
+      });
+    await batch.commit();
   }
 }

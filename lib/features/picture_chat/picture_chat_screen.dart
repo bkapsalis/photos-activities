@@ -6,6 +6,7 @@ import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
 import '../../core/utils/permissions.dart';
+import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
@@ -73,6 +74,35 @@ class PictureChatScreen extends StatelessWidget {
   }
 }
 
+/// Posts [text] as a comment on [photoId] by the signed-in reader. Resolves
+/// to whether it was posted; a failure has already been explained to them.
+Future<bool> _addComment(
+  BuildContext context,
+  String photoId,
+  String text,
+) async {
+  final currentUser = auth.FirebaseAuth.instance.currentUser;
+  if (currentUser == null) {
+    // A comment signed by a placeholder account would not belong to anyone,
+    // so it could never be edited, deleted, or counted on a profile.
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Sign in to add a comment.')));
+    return false;
+  }
+  final comment = Comment(
+    id: '',
+    user: UserProfile.fromFirebaseUser(currentUser),
+    text: text,
+    timestamp: 'Just now',
+  );
+  return runUserAction(
+    context,
+    () => FirestoreService().addComment(photoId, comment),
+    failureMessage: 'Your comment was not posted. Please try again.',
+  );
+}
+
 // ── Mobile: 40% photo / 60% comments ──────────────────
 
 class _MobilePictureChat extends StatelessWidget {
@@ -80,27 +110,6 @@ class _MobilePictureChat extends StatelessWidget {
   final VoidCallback? onClose;
 
   const _MobilePictureChat({required this.photo, this.onClose});
-
-  void _addComment(BuildContext context, String text) async {
-    final currentUser = auth.FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      // A comment signed by a placeholder account would not belong to anyone,
-      // so it could never be edited, deleted, or counted on a profile.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in to add a comment.')),
-      );
-      return;
-    }
-    final userProfile = UserProfile.fromFirebaseUser(currentUser);
-    final comment = Comment(
-      id: '',
-      user: userProfile,
-      text: text,
-      timestamp: 'Just now',
-      heartCount: 0,
-    );
-    await FirestoreService().addComment(photo.id, comment);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -404,7 +413,7 @@ class _MobilePictureChat extends StatelessWidget {
                     // Input
                     ChatInputBar(
                       hintText: 'Add a comment...',
-                      onSend: (text) => _addComment(context, text),
+                      onSend: (text) => _addComment(context, photo.id, text),
                     ),
                   ],
                 ),
@@ -472,27 +481,6 @@ class _WebPictureModal extends StatelessWidget {
   final VoidCallback? onClose;
 
   const _WebPictureModal({required this.photo, this.onClose});
-
-  void _addComment(BuildContext context, String text) async {
-    final currentUser = auth.FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      // A comment signed by a placeholder account would not belong to anyone,
-      // so it could never be edited, deleted, or counted on a profile.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in to add a comment.')),
-      );
-      return;
-    }
-    final userProfile = UserProfile.fromFirebaseUser(currentUser);
-    final comment = Comment(
-      id: '',
-      user: userProfile,
-      text: text,
-      timestamp: 'Just now',
-      heartCount: 0,
-    );
-    await FirestoreService().addComment(photo.id, comment);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -775,7 +763,8 @@ class _WebPictureModal extends StatelessWidget {
                         // Input
                         ChatInputBar(
                           hintText: 'Add a comment...',
-                          onSend: (text) => _addComment(context, text),
+                          onSend: (text) =>
+                              _addComment(context, photo.id, text),
                         ),
                       ],
                     ),
@@ -797,6 +786,33 @@ class _CommentTile extends StatelessWidget {
   final Comment comment;
 
   const _CommentTile({required this.photoId, required this.comment});
+
+  Future<void> _confirmAndDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete comment?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.heartRed),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await runUserAction(
+      context,
+      () => FirestoreService().deleteComment(photoId, comment.id),
+      failureMessage: 'That comment was not deleted. Please try again.',
+    );
+  }
 
   void _showEditCommentDialog(BuildContext context) {
     final controller = TextEditingController(text: comment.text);
@@ -821,11 +837,17 @@ class _CommentTile extends StatelessWidget {
             onPressed: () async {
               final newText = controller.text.trim();
               if (newText.isNotEmpty && comment.id.isNotEmpty) {
-                await FirestoreService().updateComment(
-                  photoId,
-                  comment.id,
-                  newText,
+                final saved = await runUserAction(
+                  ctx,
+                  () => FirestoreService().updateComment(
+                    photoId,
+                    comment.id,
+                    newText,
+                  ),
+                  failureMessage: 'Your edit was not saved. Please try again.',
                 );
+                // Kept open on failure, so the edit is not lost.
+                if (!saved) return;
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
@@ -880,10 +902,7 @@ class _CommentTile extends StatelessWidget {
                           if (val == 'edit') {
                             _showEditCommentDialog(context);
                           } else if (val == 'delete') {
-                            await FirestoreService().deleteComment(
-                              photoId,
-                              comment.id,
-                            );
+                            await _confirmAndDelete(context);
                           }
                         },
                         itemBuilder: (_) => [

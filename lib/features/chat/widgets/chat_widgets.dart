@@ -118,7 +118,10 @@ class ChatMessageBubble extends StatelessWidget {
 
 class ChatInputBar extends StatefulWidget {
   final String hintText;
-  final ValueChanged<String>? onSend;
+
+  /// Sends [text]; resolves to whether it went. A send that fails puts the
+  /// text back in the box, so nothing typed is lost.
+  final Future<bool> Function(String text)? onSend;
 
   const ChatInputBar({
     super.key,
@@ -133,11 +136,20 @@ class ChatInputBar extends StatefulWidget {
 class _ChatInputBarState extends State<ChatInputBar> {
   final TextEditingController _controller = TextEditingController();
 
-  void _handleSend() {
+  Future<void> _handleSend() async {
+    final onSend = widget.onSend;
     final text = _controller.text.trim();
-    if (text.isNotEmpty) {
-      widget.onSend?.call(text);
-      _controller.clear();
+    if (onSend == null || text.isEmpty) return;
+    // Cleared at once, as a sent message should look: Firestore shows the
+    // message straight away and only confirms it later (much later offline).
+    _controller.clear();
+    final sent = await onSend(text);
+    // Put back a message that did not go, unless something new was typed.
+    if (!sent && mounted && _controller.text.isEmpty) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
     }
   }
 

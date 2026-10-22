@@ -3,8 +3,36 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/user_action.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
+
+/// Posts [text] to a location's chat as the signed-in reader. Resolves to
+/// whether it was sent; a failure has already been explained to them.
+Future<bool> _sendMessage(
+  BuildContext context,
+  String locationId,
+  String text,
+) async {
+  final currentUser = auth.FirebaseAuth.instance.currentUser;
+  if (currentUser == null) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Sign in to join the chat.')));
+    return false;
+  }
+  final msg = ChatMessage(
+    id: '',
+    user: UserProfile.fromFirebaseUser(currentUser),
+    text: text,
+    timestamp: 'Just now',
+  );
+  return runUserAction(
+    context,
+    () => FirestoreService().sendChatMessage(locationId, msg),
+    failureMessage: 'Your message was not sent. Please try again.',
+  );
+}
 
 class LocationChatScreen extends StatelessWidget {
   final String locationId;
@@ -45,24 +73,6 @@ class _MobileChatSheet extends StatelessWidget {
     this.locationName,
     this.onClose,
   });
-
-  void _sendMessage(BuildContext context, String text) async {
-    final currentUser = auth.FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in to join the chat.')),
-      );
-      return;
-    }
-    final userProfile = UserProfile.fromFirebaseUser(currentUser);
-    final msg = ChatMessage(
-      id: '',
-      user: userProfile,
-      text: text,
-      timestamp: 'Just now',
-    );
-    await FirestoreService().sendChatMessage(locationId, msg);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +153,7 @@ class _MobileChatSheet extends StatelessWidget {
           // Input Bar
           ChatInputBar(
             hintText: 'Message $displayName community...',
-            onSend: (text) => _sendMessage(context, text),
+            onSend: (text) => _sendMessage(context, locationId, text),
           ),
         ],
       ),
@@ -161,24 +171,6 @@ class _WebChatPanel extends StatelessWidget {
     this.locationName,
     this.onClose,
   });
-
-  void _sendMessage(BuildContext context, String text) async {
-    final currentUser = auth.FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in to join the chat.')),
-      );
-      return;
-    }
-    final userProfile = UserProfile.fromFirebaseUser(currentUser);
-    final msg = ChatMessage(
-      id: '',
-      user: userProfile,
-      text: text,
-      timestamp: 'Just now',
-    );
-    await FirestoreService().sendChatMessage(locationId, msg);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +285,7 @@ class _WebChatPanel extends StatelessWidget {
                 // Input Bar
                 ChatInputBar(
                   hintText: 'Message $displayName community...',
-                  onSend: (text) => _sendMessage(context, text),
+                  onSend: (text) => _sendMessage(context, locationId, text),
                 ),
               ],
             ),

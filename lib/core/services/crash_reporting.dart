@@ -52,11 +52,22 @@ class CrashReporting {
 
   /// Records an error that was caught and handled but should not have
   /// happened.
+  ///
+  /// Also prints it, so it shows in the console during development and on
+  /// web, which Crashlytics does not cover. Reporting never throws: it runs
+  /// inside error handlers, and in tests Firebase is not set up at all.
   static void recordError(Object error, StackTrace? stack, {String? reason}) {
+    debugPrint('[error] ${reason ?? 'unexpected'}: $error');
     if (!supported) return;
-    unawaited(
-      FirebaseCrashlytics.instance.recordError(error, stack, reason: reason),
-    );
+    try {
+      unawaited(
+        FirebaseCrashlytics.instance
+            .recordError(error, stack, reason: reason)
+            .catchError((_) {}),
+      );
+    } catch (_) {
+      // Firebase not initialised, as in tests.
+    }
   }
 
   /// Whether [testCrash] is offered: to anyone in dev, and to a moderator in
