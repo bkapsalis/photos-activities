@@ -63,12 +63,13 @@ class _AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<_AppShell> {
-  void _openLocationChat(String locationId) {
+  void _openLocationChat(String locationName) {
     AnalyticsService.screen('location_chat');
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LocationChatScreen(
-          locationId: locationId,
+          locationId: locationChatId(locationName),
+          locationName: locationName,
           onClose: () => Navigator.of(context).pop(),
         ),
       ),

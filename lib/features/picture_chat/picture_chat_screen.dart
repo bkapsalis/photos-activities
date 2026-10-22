@@ -8,6 +8,7 @@ import '../../core/services/photo_deletion_service.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/live_data.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
@@ -373,42 +374,7 @@ class _MobilePictureChat extends StatelessWidget {
                     ),
 
                     // Comments stream
-                    Expanded(
-                      child: StreamBuilder<List<Comment>>(
-                        stream: firestoreService.streamComments(photo.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-
-                          final comments = snapshot.data ?? [];
-                          if (comments.isEmpty) {
-                            return const Center(
-                              child: Text(
-                                'No comments yet. Leave a comment! 💬',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            );
-                          }
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: comments.length,
-                            itemBuilder: (context, index) {
-                              return _CommentTile(
-                                photoId: photo.id,
-                                comment: comments[index],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
+                    Expanded(child: _Comments(photoId: photo.id)),
 
                     // Input
                     ChatInputBar(
@@ -721,44 +687,7 @@ class _WebPictureModal extends StatelessWidget {
                         ),
 
                         // Comments stream
-                        Expanded(
-                          child: StreamBuilder<List<Comment>>(
-                            stream: firestoreService.streamComments(photo.id),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-
-                              final comments = snapshot.data ?? [];
-                              if (comments.isEmpty) {
-                                return const Center(
-                                  child: Text(
-                                    'No comments yet. Leave a comment! 💬',
-                                    style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              return ListView.builder(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                itemCount: comments.length,
-                                itemBuilder: (context, index) {
-                                  return _CommentTile(
-                                    photoId: photo.id,
-                                    comment: comments[index],
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
+                        Expanded(child: _Comments(photoId: photo.id)),
 
                         // Input
                         ChatInputBar(
@@ -964,6 +893,38 @@ class _CommentTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A photo's comments, live, oldest first.
+class _Comments extends StatelessWidget {
+  final String photoId;
+
+  const _Comments({required this.photoId});
+
+  @override
+  Widget build(BuildContext context) {
+    return LiveData<List<Comment>>(
+      identity: photoId,
+      stream: () => FirestoreService().streamComments(photoId),
+      errorMessage: 'Comments could not be loaded.',
+      builder: (context, comments) {
+        if (comments.isEmpty) {
+          return const Center(
+            child: Text(
+              'No comments yet. Leave a comment! 💬',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: comments.length,
+          itemBuilder: (context, index) =>
+              _CommentTile(photoId: photoId, comment: comments[index]),
+        );
+      },
     );
   }
 }

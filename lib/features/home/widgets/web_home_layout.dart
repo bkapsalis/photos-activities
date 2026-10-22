@@ -8,6 +8,7 @@ import '../../../core/utils/photo_sorting.dart';
 import '../../explore/explore_view.dart';
 import '../../map/photo_map_view.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/live_data.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import '../../../core/widgets/upload_access.dart';
 import '../../auth/account_button.dart';
@@ -42,7 +43,7 @@ class WebHomeLayout extends StatefulWidget {
   /// The photo the carousel should centre on for that request.
   final String? focusPhotoId;
   final Function(String photoId)? onPhotoTap;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
 
   const WebHomeLayout({
     super.key,
@@ -337,7 +338,7 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
 class _WebTopNav extends StatelessWidget {
   final int selectedCategoryIndex;
   final ValueChanged<int> onCategoryChanged;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
 
@@ -605,7 +606,7 @@ class _ActionButton extends StatelessWidget {
 class _WebSidebar extends StatelessWidget {
   final String selectedCategory;
   final FirestoreService firestoreService;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
 
   const _WebSidebar({
     required this.selectedCategory,
@@ -665,12 +666,18 @@ class _WebSidebar extends StatelessWidget {
 
           // Location list from Firestore
           Expanded(
-            child: StreamBuilder<List<String>>(
-              stream: firestoreService.streamDistinctLocations(
-                selectedCategory,
+            child: LiveData<List<String>>(
+              identity: selectedCategory,
+              stream: () =>
+                  firestoreService.streamDistinctLocations(selectedCategory),
+              errorMessage: 'Locations could not be loaded.',
+              // The sidebar is narrow: a line and a retry, not a full panel.
+              errorBuilder: (context, retry) => TextButton.icon(
+                onPressed: retry,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Locations did not load. Retry'),
               ),
-              builder: (context, snapshot) {
-                final locations = snapshot.data ?? [];
+              builder: (context, locations) {
                 if (locations.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(20),
@@ -688,10 +695,6 @@ class _WebSidebar extends StatelessWidget {
                   itemCount: locations.length,
                   itemBuilder: (context, index) {
                     final locName = locations[index];
-                    final locId = locName.toLowerCase().replaceAll(
-                      RegExp(r'[^a-z0-9]'),
-                      '_',
-                    );
                     return ListTile(
                       dense: true,
                       leading: const Icon(
@@ -703,7 +706,7 @@ class _WebSidebar extends StatelessWidget {
                         locName,
                         style: const TextStyle(fontSize: 13),
                       ),
-                      onTap: () => onChatTap?.call(locId),
+                      onTap: () => onChatTap?.call(locName),
                     );
                   },
                 );
@@ -724,7 +727,7 @@ class _WebPhotoGrid extends StatelessWidget {
   final String? activeLocation;
   final ValueChanged<String?> onLocationChanged;
   final Function(String photoId)? onPhotoTap;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
   final ScrollController? scrollController;
 
   /// Show the photos as map pins instead of a grid. The location tabs stay

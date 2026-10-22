@@ -4,6 +4,7 @@ import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/user_action.dart';
+import '../../core/widgets/live_data.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
 
@@ -33,6 +34,11 @@ Future<bool> _sendMessage(
     failureMessage: 'Your message was not sent. Please try again.',
   );
 }
+
+/// The Firestore id of a location's chat, from the location's name. Every
+/// screen that opens a chat must use this, so they all reach the same one.
+String locationChatId(String locationName) =>
+    locationName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
 
 class LocationChatScreen extends StatelessWidget {
   final String locationId;
@@ -76,7 +82,6 @@ class _MobileChatSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
     final displayName = locationName ?? locationId;
 
     return Scaffold(
@@ -104,50 +109,9 @@ class _MobileChatSheet extends StatelessWidget {
         children: [
           // Messages Stream
           Expanded(
-            child: StreamBuilder<List<ChatMessage>>(
-              stream: firestoreService.streamChatMessages(locationId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final messages = snapshot.data ?? [];
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.forum_outlined,
-                          size: 48,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No messages yet in $displayName',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Be the first to chat! 💬',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    return ChatMessageBubble(message: messages[index]);
-                  },
-                );
-              },
+            child: _ChatMessages(
+              locationId: locationId,
+              displayName: displayName,
             ),
           ),
           // Input Bar
@@ -174,7 +138,6 @@ class _WebChatPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
     final displayName = locationName ?? locationId;
 
     return Scaffold(
@@ -251,34 +214,9 @@ class _WebChatPanel extends StatelessWidget {
 
                 // Messages Stream
                 Expanded(
-                  child: StreamBuilder<List<ChatMessage>>(
-                    stream: firestoreService.streamChatMessages(locationId),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final messages = snapshot.data ?? [];
-                      if (messages.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'No messages yet. Be the first to chat! 💬',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          return ChatMessageBubble(message: messages[index]);
-                        },
-                      );
-                    },
+                  child: _ChatMessages(
+                    locationId: locationId,
+                    displayName: displayName,
                   ),
                 ),
 
@@ -292,6 +230,55 @@ class _WebChatPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A location's messages, live, oldest first.
+class _ChatMessages extends StatelessWidget {
+  final String locationId;
+  final String displayName;
+
+  const _ChatMessages({required this.locationId, required this.displayName});
+
+  @override
+  Widget build(BuildContext context) {
+    return LiveData<List<ChatMessage>>(
+      identity: locationId,
+      stream: () => FirestoreService().streamChatMessages(locationId),
+      errorMessage: 'Messages could not be loaded.',
+      builder: (context, messages) {
+        if (messages.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.forum_outlined,
+                  size: 48,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No messages yet in $displayName',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Be the first to chat! 💬',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: messages.length,
+          itemBuilder: (context, index) =>
+              ChatMessageBubble(message: messages[index]),
+        );
+      },
     );
   }
 }

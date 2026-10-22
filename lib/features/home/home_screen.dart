@@ -9,7 +9,7 @@ import 'widgets/web_home_layout.dart';
 
 class HomeScreen extends StatefulWidget {
   final Function(String photoId)? onPhotoTap;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
 
   const HomeScreen({super.key, this.onPhotoTap, this.onChatTap});
 

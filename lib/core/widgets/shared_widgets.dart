@@ -158,10 +158,18 @@ class _LocationNameFieldState extends State<LocationNameField> {
 
   bool _isNewEntry = false;
 
+  /// Subscribed once per category. Created in build, it restarted on every
+  /// setState here, such as switching between picking and typing a name.
+  late Stream<List<String>> _locations = widget.firestoreService
+      .streamDistinctLocations(widget.category);
+
   @override
   void didUpdateWidget(covariant LocationNameField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.category != widget.category) {
+      _locations = widget.firestoreService.streamDistinctLocations(
+        widget.category,
+      );
       // Locations are scoped to category, so switching category invalidates
       // whatever was picked/typed before.
       _isNewEntry = false;
@@ -172,7 +180,9 @@ class _LocationNameFieldState extends State<LocationNameField> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<String>>(
-      stream: widget.firestoreService.streamDistinctLocations(widget.category),
+      // If the list cannot load, snapshot.data stays null and the reader can
+      // still type a name, so no error view is needed here.
+      stream: _locations,
       builder: (context, snapshot) {
         final locations = snapshot.data ?? const <String>[];
 

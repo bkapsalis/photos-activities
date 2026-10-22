@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/models.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/widgets/live_data.dart';
 
 /// Where the reader was when they opened the map, so a second tap on the
 /// map button puts them back there: the same screen, category, location
@@ -66,8 +67,8 @@ class FeedUnderMap extends StatelessWidget {
 /// build method gets a new stream on every rebuild — a search keystroke, a
 /// tab change, opening the map — and resubscribes each time, flashing the
 /// spinner and throwing away the feed beneath it along with its scroll
-/// position.
-class CategoryPhotosBuilder extends StatefulWidget {
+/// position. LiveData holds it once, and says so when it cannot load.
+class CategoryPhotosBuilder extends StatelessWidget {
   final String category;
   final Widget Function(BuildContext context, List<PhotoPost> photos) builder;
 
@@ -78,33 +79,12 @@ class CategoryPhotosBuilder extends StatefulWidget {
   });
 
   @override
-  State<CategoryPhotosBuilder> createState() => _CategoryPhotosBuilderState();
-}
-
-class _CategoryPhotosBuilderState extends State<CategoryPhotosBuilder> {
-  final _firestore = FirestoreService();
-  late Stream<List<PhotoPost>> _photos = _firestore.streamPhotosByCategory(
-    widget.category,
-  );
-
-  @override
-  void didUpdateWidget(CategoryPhotosBuilder old) {
-    super.didUpdateWidget(old);
-    if (widget.category != old.category) {
-      _photos = _firestore.streamPhotosByCategory(widget.category);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<PhotoPost>>(
-      stream: _photos,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        return widget.builder(context, snapshot.data ?? []);
-      },
+    return LiveData<List<PhotoPost>>(
+      identity: category,
+      stream: () => FirestoreService().streamPhotosByCategory(category),
+      errorMessage: 'Photos could not be loaded.',
+      builder: builder,
     );
   }
 }

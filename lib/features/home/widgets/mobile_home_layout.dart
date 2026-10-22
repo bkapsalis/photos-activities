@@ -3,6 +3,7 @@ import '../../../core/data/mock_data.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/live_data.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import '../../../core/widgets/upload_access.dart';
 import '../../auth/account_button.dart';
@@ -38,7 +39,7 @@ class MobileHomeLayout extends StatefulWidget {
   /// The photo the carousel should centre on for that request.
   final String? focusPhotoId;
   final Function(String photoId)? onPhotoTap;
-  final Function(String locationId)? onChatTap;
+  final Function(String locationName)? onChatTap;
 
   const MobileHomeLayout({
     super.key,
@@ -616,13 +617,12 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
               ),
               const Divider(height: 1),
               Expanded(
-                child: StreamBuilder<List<String>>(
-                  stream: firestoreService.streamDistinctLocations(category),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final locations = snapshot.data ?? [];
+                child: LiveData<List<String>>(
+                  identity: category,
+                  stream: () =>
+                      firestoreService.streamDistinctLocations(category),
+                  errorMessage: 'Locations could not be loaded.',
+                  builder: (context, locations) {
                     if (locations.isEmpty) {
                       return const Center(
                         child: Text(
@@ -636,11 +636,6 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                       itemCount: locations.length,
                       itemBuilder: (context, index) {
                         final locName = locations[index];
-                        // Use a sanitized locationId for Firestore chat path
-                        final locId = locName.toLowerCase().replaceAll(
-                          RegExp(r'[^a-z0-9]'),
-                          '_',
-                        );
                         return ListTile(
                           leading: const Icon(
                             Icons.chat_bubble_outline,
@@ -654,7 +649,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () {
                             Navigator.pop(ctx);
-                            widget.onChatTap?.call(locId);
+                            widget.onChatTap?.call(locName);
                           },
                         );
                       },
