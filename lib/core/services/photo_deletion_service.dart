@@ -136,6 +136,7 @@ class PhotoDeletionService {
         if (await _deleteFile(url)) files++;
       }
       comments = await _deleteComments(photoId);
+      await _deleteLikes(photoId);
     } catch (e, stack) {
       // Leaving the document in place keeps the photo visible and deletable
       // rather than stranding a file with nothing pointing at it.
@@ -193,6 +194,7 @@ class PhotoDeletionService {
           if (await _deleteFile(url)) files++;
         }
         comments += await _deleteComments(doc.id);
+        await _deleteLikes(doc.id);
         deletable.add(doc.reference);
       } catch (e, stack) {
         CrashReporting.recordError(
@@ -244,17 +246,22 @@ class PhotoDeletionService {
     }
   }
 
-  Future<int> _deleteComments(String photoId) async {
-    final messages = await _db
-        .collection('comments')
-        .doc(photoId)
-        .collection('messages')
-        .get();
-    if (messages.docs.isEmpty) return 0;
+  Future<int> _deleteComments(String photoId) => _deleteAll(
+    _db.collection('comments').doc(photoId).collection('messages'),
+  );
+
+  /// A photo's likes are a subcollection under it, and Firestore keeps a
+  /// subcollection after its parent document is deleted.
+  Future<int> _deleteLikes(String photoId) =>
+      _deleteAll(_db.collection('photos').doc(photoId).collection('likes'));
+
+  Future<int> _deleteAll(Query<Map<String, dynamic>> query) async {
+    final snapshot = await query.get();
+    if (snapshot.docs.isEmpty) return 0;
 
     var removed = 0;
-    for (var i = 0; i < messages.docs.length; i += _batchLimit) {
-      final slice = messages.docs.skip(i).take(_batchLimit).toList();
+    for (var i = 0; i < snapshot.docs.length; i += _batchLimit) {
+      final slice = snapshot.docs.skip(i).take(_batchLimit).toList();
       final batch = _db.batch();
       for (final doc in slice) {
         batch.delete(doc.reference);

@@ -129,12 +129,8 @@ class FirestoreService {
     return docRef.id;
   }
 
-  /// Update heart count
-  Future<void> incrementHeartCount(String photoId) async {
-    await _photosRef.doc(photoId).update({
-      'heartCount': FieldValue.increment(1),
-    });
-  }
+  // Liking lives in LikeService: one like per person needs a like document
+  // written with every change to heartCount.
 
   /// Update photo details (location name, region, category)
   Future<void> updatePhotoDetails(

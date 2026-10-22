@@ -1,6 +1,6 @@
+import '../../../core/widgets/like_button.dart';
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
-import '../../../core/services/firestore_service.dart';
 import '../../../core/services/photo_deletion_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/permissions.dart';
@@ -172,31 +172,10 @@ class PhotoCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        if (photo.id.isNotEmpty) {
-                          FirestoreService().incrementHeartCount(photo.id);
-                        }
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.favorite,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            size: 14,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            photo.heartCount.toString(),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
+                    LikeButton(
+                      photoId: photo.id,
+                      count: photo.heartCount,
+                      onImage: true,
                     ),
                   ],
                 ),

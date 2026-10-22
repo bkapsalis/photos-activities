@@ -9,6 +9,7 @@ import '../../core/utils/permissions.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_network_image.dart';
+import '../../core/widgets/like_button.dart';
 import '../../core/widgets/live_data.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
@@ -129,8 +130,6 @@ class _MobilePictureChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -218,14 +217,7 @@ class _MobilePictureChat extends StatelessWidget {
                         ],
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        if (photo.id.isNotEmpty) {
-                          firestoreService.incrementHeartCount(photo.id);
-                        }
-                      },
-                      child: HeartCount(count: photo.heartCount),
-                    ),
+                    LikeButton(photoId: photo.id, count: photo.heartCount),
                     const SizedBox(width: 12),
                     // Only the owner or a moderator; firestore.rules refuse anyone else.
                     if (canModify(photo.user.id))
@@ -459,8 +451,6 @@ class _WebPictureModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
-
     return Scaffold(
       backgroundColor: Colors.black26,
       body: Center(
@@ -560,15 +550,9 @@ class _WebPictureModal extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: () {
-                                  if (photo.id.isNotEmpty) {
-                                    firestoreService.incrementHeartCount(
-                                      photo.id,
-                                    );
-                                  }
-                                },
-                                child: HeartCount(count: photo.heartCount),
+                              LikeButton(
+                                photoId: photo.id,
+                                count: photo.heartCount,
                               ),
                               const SizedBox(width: 12),
                               // Only the owner or a moderator; firestore.rules refuse anyone else.

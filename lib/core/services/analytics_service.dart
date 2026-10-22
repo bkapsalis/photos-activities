@@ -66,6 +66,11 @@ class AnalyticsService {
     ),
   );
 
+  static void photoLiked(String photoId) => _log(
+    'photo_like',
+    () => _a.logEvent(name: 'photo_like', parameters: {'photo_id': photoId}),
+  );
+
   static void commentPosted(String photoId) => _log(
     'comment_post',
     () => _a.logEvent(name: 'comment_post', parameters: {'photo_id': photoId}),

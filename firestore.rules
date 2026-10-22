@@ -151,6 +151,26 @@ service cloud.firestore {
         && d.category is string && d.category.size() <= 60;
     }
 
+    // The caller's like on a photo, and whether this write adds or removes
+    // it: the photo's like count may only move with it.
+    function myLike(photoId) {
+      return /databases/$(database)/documents/photos/$(photoId)/likes/$(request.auth.uid);
+    }
+
+    function myLikeAppears(photoId) {
+      return !exists(myLike(photoId)) && existsAfter(myLike(photoId));
+    }
+
+    function myLikeGoes(photoId) {
+      return exists(myLike(photoId)) && !existsAfter(myLike(photoId));
+    }
+
+    function heartCountMoves(photoId, delta) {
+      let path = /databases/$(database)/documents/photos/$(photoId);
+      return getAfter(path).data.get('heartCount', 0)
+        == get(path).data.get('heartCount', 0) + delta;
+    }
+
     // A comment must be counted on its photo in the same write, so the
     // count shown on the photo always matches the thread.
     function photoCommentCountMoves(photoId, delta) {
@@ -165,14 +185,39 @@ service cloud.firestore {
       allow create: if newPhoto() && (isAdmin() || uploadsOpen());
       allow update: if isAdmin()
         || ownerDetailsEdit()
-        // Anyone signed in can like a photo, one step at a time...
+        // A like moves the count by one only together with the caller's
+        // own like document appearing, and an unlike only with it going:
+        // one like per person, and nobody can add likes for anyone else.
         || (signedIn() && onlyChanges(['heartCount'])
-            && counterMovedBy('heartCount', 1))
-        // ...and adding or deleting a comment keeps the count in step.
+            && ((counterMovedBy('heartCount', 1) && myLikeAppears(photoId))
+              || (counterMovedBy('heartCount', -1) && myLikeGoes(photoId))))
+        // Adding or deleting a comment keeps the count in step.
         || (signedIn() && onlyChanges(['commentCount'])
             && (counterMovedBy('commentCount', 1)
                 || counterMovedBy('commentCount', -1)));
       allow delete: if isAdmin() || ownedByCaller(resource.data);
+
+      // ── Likes: photos/{photoId}/likes/{uid} ──────────
+      // One document per person who likes the photo, named by their uid,
+      // written in the same batch as the photo's heartCount moves.
+      match /likes/{userId} {
+        // Your own like; and all of them for the photo's owner or a
+        // moderator, who must list them to clear them when deleting it.
+        allow read: if (signedIn() && userId == request.auth.uid)
+          || isAdmin()
+          || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
+        allow create: if signedIn() && userId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && heartCountMoves(photoId, 1);
+        // Unliking takes the count down with it. Deleting a photo clears its
+        // likes too, which its owner or a moderator may do without counting.
+        allow delete: if (signedIn() && userId == request.auth.uid
+              && heartCountMoves(photoId, -1))
+          || isAdmin()
+          || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
+      }
     }
 
     // ── Locations ──────────────────────────────────────
@@ -218,6 +263,13 @@ service cloud.firestore {
     // messages, so this permits counting and renaming what you wrote and
     // nothing else.
     match /{path=**}/messages/{messageId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+    }
+
+    // Likes likewise: the app asks which photos the reader has liked, and
+    // may see only its own.
+    match /{path=**}/likes/{likeId} {
       allow read: if request.auth != null
                   && resource.data.userId == request.auth.uid;
     }

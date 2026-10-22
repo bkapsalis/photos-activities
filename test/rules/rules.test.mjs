@@ -51,6 +51,18 @@ const photo = (owner, extra = {}) => ({
 // A comment or chat message as the app writes it.
 const post = (uid, extra = {}) => ({ ...author(uid), text: 'Lovely spot', timestamp: serverTimestamp(), ...extra });
 
+// Liking a photo means adding your like document and counting it, in one
+// batch, the way LikeService.setLiked does. Unliking reverses both.
+function likeBatch(uid, photoId, { liked = true, likeId = uid, countBy } = {}) {
+  const db = { alice, bob, g7xQ2: guest }[uid]().firestore();
+  const b = writeBatch(db);
+  const like = doc(db, `photos/${photoId}/likes/${likeId}`);
+  if (liked) b.set(like, { userId: likeId, createdAt: serverTimestamp() });
+  else b.delete(like);
+  b.update(doc(db, `photos/${photoId}`), { heartCount: increment(countBy ?? (liked ? 1 : -1)) });
+  return b.commit();
+}
+
 // Posting a comment means adding it and counting it on its photo, in one
 // batch, the way FirestoreService.addComment does.
 function commentBatch(ctx, photoId, data, countBy = 1) {
@@ -113,7 +125,7 @@ await check('admin can open and close uploads', async () => {
   await assertSucceeds(setDoc(doc(admin().firestore(), 'config/app'), { uploadsOpen: false }));
 });
 await check('closed uploads still allow likes and comments', async () => {
-  await assertSucceeds(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1) }));
+  await assertSucceeds(likeBatch('bob', 'p1'));
   await assertSucceeds(commentBatch(guest(), 'p1', post('g7xQ2')));
 });
 
@@ -132,7 +144,32 @@ await check('owner cannot set their own like count', () => assertFails(updateDoc
 await check('owner can edit details', () => assertSucceeds(updateDoc(doc(alice().firestore(), 'photos/p1'), { locationName: 'New', category: 'Hiking Areas', locationRegion: 'X' })));
 await check('owner cannot give the photo away', () => assertFails(updateDoc(doc(alice().firestore(), 'photos/p1'), { userId: 'bob' })));
 await check('non-owner cannot edit details', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { locationName: 'Hacked' })));
-await check('non-owner can like (+1)', () => assertSucceeds(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1) })));
+await check('anyone signed in can like once', () => assertSucceeds(likeBatch('bob', 'p1')));
+await check('a second like by the same person fails', () => assertFails(likeBatch('bob', 'p1')));
+await check('they can unlike, which takes the count back down', () => assertSucceeds(likeBatch('bob', 'p1', { liked: false })));
+await check('cannot unlike a photo you have not liked', () => assertFails(likeBatch('alice', 'p2', { liked: false })));
+await check('the count cannot move without a like document', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1) })));
+await check('a like document cannot be added without counting it', async () => {
+  const db = bob().firestore();
+  await assertFails(setDoc(doc(db, 'photos/p2/likes/bob'), { userId: 'bob', createdAt: serverTimestamp() }));
+});
+await check('cannot like on someone else\'s behalf', () => assertFails(likeBatch('bob', 'p2', { likeId: 'alice' })));
+await check('a like cannot count for two', () => assertFails(likeBatch('alice', 'p2', { countBy: 2 })));
+await check('a guest can like too', () => assertSucceeds(likeBatch('g7xQ2', 'p2')));
+await check('you can see your own like, not other people\'s', async () => {
+  await assertSucceeds(getDoc(doc(guest().firestore(), 'photos/p2/likes/g7xQ2')));
+  await assertFails(getDoc(doc(alice().firestore(), 'photos/p2/likes/g7xQ2')));
+});
+await check('the app can list your own likes across photos', () =>
+  assertSucceeds(getDocs(query(collectionGroup(guest().firestore(), 'likes'), where('userId', '==', 'g7xQ2')))));
+await check('nobody can list someone else\'s likes', () =>
+  assertFails(getDocs(query(collectionGroup(bob().firestore(), 'likes'), where('userId', '==', 'g7xQ2')))));
+await check('the photo owner can list its likes, to clear them', () =>
+  assertSucceeds(getDocs(collection(bob().firestore(), 'photos/p2/likes'))));
+await check('nobody else can list a photo\'s likes', () =>
+  assertFails(getDocs(collection(alice().firestore(), 'photos/p2/likes'))));
+await check('the photo owner can clear its likes when deleting it', () =>
+  assertSucceeds(deleteDoc(doc(bob().firestore(), 'photos/p2/likes/g7xQ2'))));
 await check('non-owner cannot like by +5', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(5) })));
 await check('non-owner cannot reset likes', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: 0 })));
 await check('non-owner cannot sneak an edit in with a like', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { heartCount: increment(1), locationName: 'Hacked' })));
@@ -142,7 +179,7 @@ await check('commentCount can move -1', () => assertSucceeds(updateDoc(doc(bob()
 await check('commentCount cannot jump', () => assertFails(updateDoc(doc(bob().firestore(), 'photos/p1'), { commentCount: 99 })));
 await check('like works on a photo with no heartCount field', async () => {
   await seed((db) => setDoc(doc(db, 'photos/old'), { userId: 'alice', imageUrl: 'x' }));
-  await assertSucceeds(updateDoc(doc(bob().firestore(), 'photos/old'), { heartCount: increment(1) }));
+  await assertSucceeds(likeBatch('bob', 'old'));
 });
 await check('non-owner cannot delete', () => assertFails(deleteDoc(doc(bob().firestore(), 'photos/p1'))));
 await check('owner can delete', () => assertSucceeds(deleteDoc(doc(alice().firestore(), 'photos/p1'))));
