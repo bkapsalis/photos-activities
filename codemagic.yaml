@@ -10,9 +10,7 @@ workflows:
         - pattern: dev
           include: true
     environment:
-      flutter: stable
-      groups:
-        - firebase_credentials
+      flutter: 3.47.1
     scripts:
       - name: Get dependencies
         script: flutter pub get
@@ -29,9 +27,18 @@ workflows:
       - build/web/**
 
   # ── Staging Build ──────────────────────────────────────
+  # Android goes to the internal-testers group by Firebase App Distribution
+  # and the web app to photos-activities-staging.web.app. iOS (TestFlight)
+  # is added once App Store Connect is set up.
+  #
+  # Needs, in Codemagic: the Android keystore "bills_upload_key" (Code
+  # signing identities), and the variable groups "staging"
+  # (FIREBASE_SERVICE_ACCOUNT, the codemagic-staging service account's JSON
+  # key) and "maps" (MAPS_API_KEY_ANDROID, MAPS_API_KEY_IOS).
   staging-build:
     name: Staging Build
     max_build_duration: 60
+    instance_type: mac_mini_m2
     triggering:
       events:
         - push
@@ -39,41 +46,53 @@ workflows:
         - pattern: staging
           include: true
     environment:
-      flutter: stable
+      flutter: 3.47.1
       groups:
-        - firebase_credentials
-        - android_signing
-        - ios_signing
+        - staging
+        - maps
+      # Provides CM_KEYSTORE_PATH and friends, which build.gradle.kts reads
+      # to sign release builds with the upload key.
+      android_signing:
+        - bills_upload_key
     scripts:
       - name: Get dependencies
         script: flutter pub get
+      - name: Write the Maps keys
+        # Both files are gitignored, so a fresh checkout has neither.
+        script: |
+          echo "MAPS_API_KEY=$MAPS_API_KEY_ANDROID" >> android/local.properties
+          echo "MAPS_API_KEY=$MAPS_API_KEY_IOS" > ios/Flutter/Maps.xcconfig
       - name: Analyze
         script: flutter analyze --no-fatal-infos
       - name: Run tests
         script: flutter test
       - name: Build Android APK (Staging)
-        script: flutter build apk --flavor staging -t lib/main_staging.dart --release
-      - name: Build iOS (Staging)
+        # Codemagic's own counter, so every build has a higher version code.
         script: |
-          flutter build ipa --flavor staging -t lib/main_staging.dart --release \
-            --export-options-plist=/tmp/ExportOptions.plist
+          flutter build apk --flavor staging -t lib/main_staging.dart \
+            --release --build-number=$BUILD_NUMBER
       - name: Build Web (Staging)
-        script: flutter build web -t lib/main_staging.dart
+        script: flutter build web -t lib/main_staging.dart --release
+      - name: Publish Web to Firebase Hosting (Staging)
+        script: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$CM_BUILD_DIR/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$CM_BUILD_DIR/firebase-sa.json"
+          command -v firebase >/dev/null || npm install -g firebase-tools
+          firebase deploy --only hosting --project photos-activities-staging \
+            --non-interactive --message "Codemagic build $BUILD_NUMBER"
+          rm -f "$CM_BUILD_DIR/firebase-sa.json"
     artifacts:
       - build/app/outputs/flutter-apk/app-staging-release.apk
-      - build/ios/ipa/*.ipa
       - build/web/**
-    # Publishing is off until its secrets exist in Codemagic: the whole file
-    # is validated before any workflow runs, so a missing variable here
-    # blocks the dev build too. Restore once FIREBASE_SERVICE_ACCOUNT and
-    # FIREBASE_ANDROID_APP_ID_STAGING are set.
-    # publishing:
-    #   firebase:
-    #     firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
-    #     android:
-    #       app_id: $FIREBASE_ANDROID_APP_ID_STAGING
-    #       groups:
-    #         - internal-testers
+    publishing:
+      firebase:
+        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
+        android:
+          # The staging Android app's id (not a secret; it is also in
+          # android/app/src/staging/google-services.json).
+          app_id: 1:593867148848:android:afaf2244424d0b8022a7f5
+          groups:
+            - internal-testers
 
   # ── Production Release ─────────────────────────────────
   prod-release:
