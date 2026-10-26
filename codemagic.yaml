@@ -27,18 +27,23 @@ workflows:
       - build/web/**
 
   # ── Staging Build ──────────────────────────────────────
-  # Android goes to the internal-testers group by Firebase App Distribution
-  # and the web app to photos-activities-staging.web.app. iOS (TestFlight)
-  # is added once App Store Connect is set up.
+  # Android goes to the internal-testers group by Firebase App Distribution,
+  # iOS to TestFlight (App Store Connect app "Bill's Bay Area Staging"), and
+  # the web app to photos-activities-staging.web.app.
   #
   # Needs, in Codemagic: the Android keystore "bills_upload_key" (Code
-  # signing identities), and the variable groups "staging"
-  # (FIREBASE_SERVICE_ACCOUNT, the codemagic-staging service account's JSON
-  # key) and "maps" (MAPS_API_KEY_ANDROID, MAPS_API_KEY_IOS).
+  # signing identities); the App Store Connect API key "bills_asc_key"
+  # (Integrations > Developer Portal), with which Codemagic creates and
+  # renews the iOS certificate and provisioning profile itself; and the
+  # variable groups "staging" (FIREBASE_SERVICE_ACCOUNT, the
+  # codemagic-staging service account's JSON key) and "maps"
+  # (MAPS_API_KEY_ANDROID, MAPS_API_KEY_IOS).
   staging-build:
     name: Staging Build
-    max_build_duration: 60
+    max_build_duration: 90
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: bills_asc_key
     triggering:
       events:
         - push
@@ -47,9 +52,13 @@ workflows:
           include: true
     environment:
       flutter: 3.47.1
+      xcode: latest
       groups:
         - staging
         - maps
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.billsbayarea.app.staging
       # Provides CM_KEYSTORE_PATH and friends, which build.gradle.kts reads
       # to sign release builds with the upload key.
       android_signing:
@@ -78,6 +87,15 @@ workflows:
         script: |
           flutter build apk --flavor staging -t lib/main_staging.dart \
             --release --build-number=$BUILD_NUMBER
+      - name: Apply the iOS signing files to the Xcode project
+        script: xcode-project use-profiles
+      - name: Build iOS IPA (Staging)
+        # Same build counter as Android; TestFlight needs each upload's
+        # build number to be higher than the last.
+        script: |
+          flutter build ipa --flavor staging -t lib/main_staging.dart \
+            --release --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
       - name: Build Web (Staging)
         script: flutter build web -t lib/main_staging.dart --release
       - name: Publish Web to Firebase Hosting (Staging)
@@ -90,8 +108,14 @@ workflows:
           rm -f "$CM_BUILD_DIR/firebase-sa.json"
     artifacts:
       - build/app/outputs/flutter-apk/app-staging-release.apk
+      - build/ios/ipa/*.ipa
       - build/web/**
     publishing:
+      app_store_connect:
+        auth: integration
+        # Uploaded builds become available to TestFlight testers; nothing
+        # is submitted for App Store review.
+        submit_to_testflight: true
       firebase:
         firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
         android:

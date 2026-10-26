@@ -5,3 +5,6 @@
 #include? "Maps.xcconfig"
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.profile-prod.xcconfig"
 #include "Generated.xcconfig"
+// The flavor's display name and bundle id; without this include the app
+// has no name under its icon.
+#include "Prod.xcconfig"

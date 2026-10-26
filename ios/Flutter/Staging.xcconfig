@@ -1,4 +1,5 @@
 // Staging flavor configuration
 PRODUCT_BUNDLE_IDENTIFIER = com.billsbayarea.app.staging
-PRODUCT_NAME = BillsFunThings Staging
 DISPLAY_NAME = Bill's Bay Area Fun Activities (Staging)
+// No PRODUCT_NAME here: the app bundle stays Runner.app, which Flutter's
+// tooling expects. DISPLAY_NAME is the name shown under the icon.

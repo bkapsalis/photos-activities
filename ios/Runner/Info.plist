@@ -50,6 +50,8 @@
 	<string>1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>When you take a photo in the app, your location is saved with it so it can be shown on the map and others can get directions.</string>
 	<key>NSCameraUsageDescription</key>
