@@ -57,10 +57,17 @@ workflows:
     scripts:
       - name: Get dependencies
         script: flutter pub get
-      - name: Write the Maps keys
-        # Both files are gitignored, so a fresh checkout has neither.
+      - name: Check and write the Maps keys
+        # Without a key the map is blank but nothing fails, so check here.
+        # Android's build.gradle.kts reads MAPS_API_KEY_ANDROID itself; iOS
+        # reads ios/Flutter/Maps.xcconfig, gitignored, so write it.
         script: |
-          echo "MAPS_API_KEY=$MAPS_API_KEY_ANDROID" >> android/local.properties
+          for v in MAPS_API_KEY_ANDROID MAPS_API_KEY_IOS; do
+            if [ -z "${!v}" ]; then
+              echo "Missing $v: add it to the 'maps' variable group in Codemagic."
+              exit 1
+            fi
+          done
           echo "MAPS_API_KEY=$MAPS_API_KEY_IOS" > ios/Flutter/Maps.xcconfig
       - name: Analyze
         script: flutter analyze --no-fatal-infos

@@ -1,12 +1,16 @@
 import java.util.Properties
 
-// Maps key lives in android/local.properties, which git ignores, so the key
-// is never committed. Missing key -> empty placeholder -> map tiles fail to
-// load with a clear log message rather than a build error.
+// Maps key: android/local.properties on a developer's machine (git ignores
+// it, so the key is never committed), or the MAPS_API_KEY_ANDROID variable
+// on Codemagic. Missing key -> empty placeholder -> map tiles fail to load
+// with a clear log message rather than a build error; the staging workflow
+// checks the variable first so CI cannot ship that by accident.
 val mapsApiKey: String = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
-}.getProperty("MAPS_API_KEY") ?: ""
+}.getProperty("MAPS_API_KEY")?.takeIf { it.isNotBlank() }
+    ?: System.getenv("MAPS_API_KEY_ANDROID")?.takeIf { it.isNotBlank() }
+    ?: ""
 
 // Release signing: the upload key, from android/key.properties on a
 // developer's machine (git ignores it) or, on Codemagic, from the variables
