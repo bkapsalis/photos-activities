@@ -113,9 +113,11 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        # Uploaded builds become available to TestFlight testers; nothing
-        # is submitted for App Store review.
-        submit_to_testflight: true
+        # Once Apple has processed an upload, internal testers (App Store
+        # Connect users in a TestFlight internal group) can install it. true
+        # would also submit it to Beta App Review for external testers, which
+        # needs the TestFlight Test Information page filled in first.
+        submit_to_testflight: false
       firebase:
         firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
         android:
