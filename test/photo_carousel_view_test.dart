@@ -399,6 +399,35 @@ void main() {
       expect(_thumbIsSelected(tester, 'p2'), isTrue);
     });
 
+    testWidgets('tapping the photo closes it', (tester) async {
+      await tester.pumpWidget(_app(testPhotos(3)));
+      await tester.pumpAndSettle();
+      await tester.tap(_thumb('p1'));
+      await tester.pumpAndSettle();
+      await tester.tap(_large('p1'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FullScreenPhotoView), findsOneWidget);
+
+      await tester.tap(find.byType(InteractiveViewer));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FullScreenPhotoView), findsNothing);
+      expect(_large('p1'), findsOneWidget);
+      expect(_thumbIsSelected(tester, 'p1'), isTrue);
+    });
+
+    testWidgets('dragging the photo does not close it', (tester) async {
+      await tester.pumpWidget(_app(testPhotos(2)));
+      await tester.pumpAndSettle();
+      await tester.tap(_large('p0'));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(InteractiveViewer), const Offset(80, 40));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FullScreenPhotoView), findsOneWidget);
+    });
+
     testWidgets('Escape closes it too', (tester) async {
       await tester.pumpWidget(_app(testPhotos(2)));
       await tester.pumpAndSettle();

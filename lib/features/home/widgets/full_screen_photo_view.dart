@@ -9,7 +9,9 @@ import '../../../core/widgets/app_network_image.dart';
 /// Opened from the carousel's large image, which shares its [heroTag], so the
 /// picture grows into place and shrinks back on the way out. Closing pops this
 /// route and nothing else, which leaves the carousel exactly as it was — same
-/// photo selected, same thumbnail centred.
+/// photo selected, same thumbnail centred. Tapping anywhere on the photo
+/// closes it, as does Back or Esc; dragging and pinching still pan and zoom,
+/// because a tap only counts when the finger lifts without moving.
 class FullScreenPhotoView extends StatelessWidget {
   final PhotoPost photo;
 
@@ -47,15 +49,20 @@ class FullScreenPhotoView extends StatelessWidget {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              InteractiveViewer(
-                minScale: 1,
-                maxScale: 5,
-                child: Hero(
-                  tag: heroTag(photo.id),
-                  child: AppNetworkImage(
-                    photo.imageUrl,
-                    fit: BoxFit.contain,
-                    onDark: true,
+              GestureDetector(
+                // opaque: the black around a letterboxed photo closes too.
+                behavior: HitTestBehavior.opaque,
+                onTap: close,
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: Hero(
+                    tag: heroTag(photo.id),
+                    child: AppNetworkImage(
+                      photo.imageUrl,
+                      fit: BoxFit.contain,
+                      onDark: true,
+                    ),
                   ),
                 ),
               ),
