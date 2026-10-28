@@ -325,7 +325,7 @@ class _Caption extends StatelessWidget {
     this.onDetails,
   });
 
-  static const linkLabel = 'Image Details and Directions';
+  static const linkLabel = 'Image Comments and Directions';
 
   @override
   Widget build(BuildContext context) {
@@ -334,10 +334,18 @@ class _Caption extends StatelessWidget {
     // way in of its own.
     final link = onDetails == null
         ? null
-        : TextButton.icon(
+        : OutlinedButton.icon(
             onPressed: onDetails,
-            icon: const Icon(Icons.info_outline, size: 18),
+            icon: const Icon(Icons.forum_outlined, size: 18),
             label: const Text(linkLabel),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           );
 
     return Padding(
@@ -412,30 +420,19 @@ class _LargePhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.zoomIn,
-      child: Semantics(
-        button: true,
-        label: 'Open ${photo.location.name} photo full screen',
-        // Deliberately not keyed by photo: the same image widget is reused as
-        // the selection changes, so while the strip glides past photos the
-        // previous one stays up until the next has loaded, instead of a grey
-        // placeholder flashing between every one.
-        child: GestureDetector(
-          onTap: () => FullScreenPhotoView.open(context, photo),
-          child: Hero(
-            tag: FullScreenPhotoView.heroTag(photo.id),
-            // contain, never cover: the whole photo at its own proportions,
-            // letterboxed by whatever space is left over.
-            child: SizedBox.expand(
-              child: AppNetworkImage(
-                photo.imageUrl,
-                fit: BoxFit.contain,
-                keepPreviousWhileLoading: true,
-              ),
-            ),
-          ),
-        ),
+    // Deliberately not keyed by photo: the same image widget is reused as
+    // the selection changes, so while the strip glides past photos the
+    // previous one stays up until the next has loaded, instead of a grey
+    // placeholder flashing between every one.
+    return TapToEnlarge(
+      photo: photo,
+      sharedTag: FullScreenPhotoView.heroTag(photo.id),
+      // contain, never cover: the whole photo at its own proportions,
+      // letterboxed by whatever space is left over.
+      child: AppNetworkImage(
+        photo.imageUrl,
+        fit: BoxFit.contain,
+        keepPreviousWhileLoading: true,
       ),
     );
   }

@@ -301,7 +301,7 @@ void main() {
       expect(_thumbIsSelected(tester, 'p2'), isTrue);
     });
 
-    testWidgets('"Image Details and Directions" opens the selected '
+    testWidgets('"Image Comments and Directions" opens the selected '
         "photo's own page", (tester) async {
       String? opened;
       await tester.pumpWidget(
@@ -312,7 +312,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Details'), findsNothing);
-      await tester.tap(find.text('Image Details and Directions'));
+      await tester.tap(find.text('Image Comments and Directions'));
       expect(opened, 'p1');
     });
 
@@ -326,7 +326,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull); // no overflow
-      final link = find.text('Image Details and Directions');
+      final link = find.text('Image Comments and Directions');
       final place = find.text('Spot 0');
       expect(link, findsOneWidget);
       expect(place, findsOneWidget);
@@ -426,6 +426,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(FullScreenPhotoView), findsOneWidget);
+    });
+
+    testWidgets('the large photo says it can be enlarged', (tester) async {
+      await tester.pumpWidget(_app(testPhotos(2)));
+      await tester.pumpAndSettle();
+
+      expect(find.text(TapToEnlarge.hintLabel), findsOneWidget);
+      // Tapping the label itself enlarges too.
+      await tester.tap(find.text(TapToEnlarge.hintLabel));
+      await tester.pumpAndSettle();
+      expect(find.byType(FullScreenPhotoView), findsOneWidget);
+    });
+
+    testWidgets('a comments page photo opens full screen without a Hero', (
+      tester,
+    ) async {
+      // The comments page can sit over a carousel already showing this
+      // photo under the carousel's tag; a second Hero with it would clash.
+      final photo = testPhotos(1).single;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TapToEnlarge(
+              photo: photo,
+              child: const ColoredBox(color: Colors.black),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(TapToEnlarge));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FullScreenPhotoView), findsOneWidget);
+      expect(find.byType(Hero), findsNothing);
+
+      await tester.tap(find.byType(InteractiveViewer));
+      await tester.pumpAndSettle();
+      expect(find.byType(FullScreenPhotoView), findsNothing);
     });
 
     testWidgets('Escape closes it too', (tester) async {

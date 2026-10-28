@@ -14,6 +14,7 @@ import '../../core/widgets/live_data.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
+import '../home/widgets/full_screen_photo_view.dart';
 import '../map/photo_location_screen.dart';
 
 class PictureChatScreen extends StatelessWidget {
@@ -145,11 +146,14 @@ class _MobilePictureChat extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     const ColoredBox(color: Colors.black),
-                    AppNetworkImage(
-                      photo.imageUrl,
-                      fit: BoxFit.contain,
-                      // Shown on black: dark loading and error states.
-                      onDark: true,
+                    TapToEnlarge(
+                      photo: photo,
+                      child: AppNetworkImage(
+                        photo.imageUrl,
+                        fit: BoxFit.contain,
+                        // Shown on black: dark loading and error states.
+                        onDark: true,
+                      ),
                     ),
                     // Back button
                     Positioned(
@@ -496,11 +500,14 @@ class _WebPictureModal extends StatelessWidget {
                             children: [
                               Container(
                                 color: Colors.black,
-                                child: AppNetworkImage(
-                                  photo.imageUrl,
-                                  fit: BoxFit.contain,
-                                  // Shown on black: dark loading and error states.
-                                  onDark: true,
+                                child: TapToEnlarge(
+                                  photo: photo,
+                                  child: AppNetworkImage(
+                                    photo.imageUrl,
+                                    fit: BoxFit.contain,
+                                    // Shown on black: dark loading and error states.
+                                    onDark: true,
+                                  ),
                                 ),
                               ),
                               Positioned(
