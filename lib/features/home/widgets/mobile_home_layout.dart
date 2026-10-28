@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
+import '../../../core/utils/upload_sources.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/live_data.dart';
 import '../../../core/widgets/shared_widgets.dart';
@@ -19,7 +21,7 @@ import 'location_tab_bar.dart';
 import 'map_toggle.dart';
 import 'photo_feed_view.dart';
 import 'photo_masonry_grid.dart';
-import 'batch_upload_dialog.dart';
+import 'upload_images_dialog.dart';
 import 'upload_photo_dialog.dart';
 import 'view_mode_toggle_button.dart';
 
@@ -536,7 +538,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Upload Photo',
+                'Upload',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
@@ -557,23 +559,16 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                 Icons.photo_library,
                 color: AppColors.primary,
               ),
-              title: const Text('Upload from Device'),
-              subtitle: const Text('Pick one image from gallery'),
+              title: const Text('Upload Image or Images'),
+              subtitle: Text(
+                uploadSourcesSummary(
+                  isWeb: kIsWeb,
+                  platform: defaultTargetPlatform,
+                ),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
-                UploadPhotoDialog.showGallery(
-                  context,
-                  initialCategory: category,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_open, color: AppColors.primary),
-              title: const Text('Upload from Folder'),
-              subtitle: const Text('Select a folder or pick multiple files'),
-              onTap: () {
-                Navigator.pop(ctx);
-                BatchUploadDialog.show(context, initialCategory: category);
+                UploadImagesDialog.show(context, initialCategory: category);
               },
             ),
             const SizedBox(height: 8),

@@ -38,20 +38,6 @@ class UploadPhotoDialog extends StatefulWidget {
     );
   }
 
-  /// Show dialog for single gallery pick
-  static Future<void> showGallery(
-    BuildContext context, {
-    String initialCategory = 'Hiking Areas',
-  }) {
-    return showDialog(
-      context: context,
-      builder: (_) => UploadPhotoDialog(
-        initialCategory: initialCategory,
-        imageSource: ImageSource.gallery,
-      ),
-    );
-  }
-
   @override
   State<UploadPhotoDialog> createState() => _UploadPhotoDialogState();
 }

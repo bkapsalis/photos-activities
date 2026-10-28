@@ -20,7 +20,7 @@ import 'location_tab_bar.dart';
 import 'map_toggle.dart';
 import 'photo_feed_view.dart';
 import 'photo_masonry_grid.dart';
-import 'batch_upload_dialog.dart';
+import 'upload_images_dialog.dart';
 import 'upload_photo_dialog.dart';
 import 'view_mode_toggle_button.dart';
 
@@ -532,18 +532,8 @@ class _WebTopNav extends StatelessWidget {
                           const SizedBox(width: 8),
                           _ActionButton(
                             icon: Icons.photo_library,
-                            label: 'Upload',
-                            onTap: () => UploadPhotoDialog.showGallery(
-                              context,
-                              initialCategory:
-                                  categories[selectedCategoryIndex],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _ActionButton(
-                            icon: Icons.folder_open,
-                            label: 'Folder',
-                            onTap: () => BatchUploadDialog.show(
+                            label: 'Upload Image or Images',
+                            onTap: () => UploadImagesDialog.show(
                               context,
                               initialCategory:
                                   categories[selectedCategoryIndex],
