@@ -312,29 +312,14 @@ class StorageService {
     }
   }
 
-  /// Pick an entire folder and load every image file inside it.
-  ///
-  /// `file_picker`'s `getDirectoryPath()` has no Android, iOS or web
-  /// implementation — only macOS, Windows and Linux, none of which this app
-  /// ships to — so calling it on any of our actual platforms always threw
-  /// `UnimplementedError` and the button did nothing. Web gets a real
-  /// directory picker instead, via the browser's own `<input
-  /// webkitdirectory>` (see folder_picker_web.dart). Android and iOS have no
-  /// comparable API at all, so there the native multi-file picker is the
-  /// honest equivalent: it lets someone navigate into a folder and select
-  /// every file in it, which is the same outcome by a different gesture.
+  /// Pick an entire folder and load every image file inside it, through
+  /// the browser's folder dialog on the web and Android's folder browser on
+  /// Android (see folder_picker.dart). Throws when the folder cannot be
+  /// read, for the caller to say so: an empty answer means none was chosen.
   Future<List<PickedFileData>> pickFolderAndScanImages({int limit = 50}) async {
-    if (!kIsWeb) {
-      return pickFilesViaFilePicker(limit: limit);
-    }
-    try {
-      final files = await folder_picker.pickFolderImages(limit: limit);
-      return files
-          .map((f) => PickedFileData(name: f.name, bytes: f.bytes))
-          .toList();
-    } catch (e, stack) {
-      CrashReporting.recordError(e, stack, reason: 'picking a folder');
-      return [];
-    }
+    final files = await folder_picker.pickFolderImages(limit: limit);
+    return files
+        .map((f) => PickedFileData(name: f.name, bytes: f.bytes))
+        .toList();
   }
 }

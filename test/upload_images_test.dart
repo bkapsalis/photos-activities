@@ -7,13 +7,21 @@ import 'package:image/image.dart' as img;
 
 void main() {
   group('uploadSourcesFor', () {
-    test('phones offer their photo library and the file browser', () {
-      for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-        expect(uploadSourcesFor(isWeb: false, platform: platform), [
-          UploadSource.photoLibrary,
-          UploadSource.files,
-        ]);
-      }
+    test('Android offers its photo library, the file browser and a whole '
+        'folder', () {
+      expect(uploadSourcesFor(isWeb: false, platform: TargetPlatform.android), [
+        UploadSource.photoLibrary,
+        UploadSource.files,
+        UploadSource.folder,
+      ]);
+    });
+
+    test('iOS offers its photo library and Files, where Select takes a '
+        'folder', () {
+      expect(uploadSourcesFor(isWeb: false, platform: TargetPlatform.iOS), [
+        UploadSource.photoLibrary,
+        UploadSource.files,
+      ]);
     });
 
     test('the web offers its file dialog and a whole folder', () {

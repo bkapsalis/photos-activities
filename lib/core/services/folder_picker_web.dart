@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:js_interop';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
 const _imageExtensions = {'.jpg', '.jpeg', '.png', '.webp', '.heic'};
@@ -20,7 +20,7 @@ Future<List<({String name, Uint8List bytes})>> pickFolderImages({
   web.document.body?.append(input);
 
   try {
-    final files = await _awaitSelection(input);
+    final files = await awaitSelection(input);
     if (files == null) return [];
 
     final result = <({String name, Uint8List bytes})>[];
@@ -48,40 +48,30 @@ Future<List<({String name, Uint8List bytes})>> pickFolderImages({
 /// Resolves with the chosen [web.FileList], or `null` if the dialog was
 /// cancelled.
 ///
-/// There is no cancel event for `<input type=file>`: the only signal is
-/// focus returning to the page without a 'change' having fired first. Both
-/// listeners are torn down the moment either one settles the result, so a
-/// cancel never leaves a stray listener behind to fire on some later,
-/// unrelated focus change.
-Future<web.FileList?> _awaitSelection(web.HTMLInputElement input) {
+/// Waits for the browser to say which: 'change' when files were chosen,
+/// 'cancel' when they were not. Guessing a cancel from focus returning to
+/// the page loses real selections: after a folder is picked Chrome asks
+/// "Upload N files to this site?", and the page has focus again while that
+/// question is still open. Both listeners are torn down the moment either
+/// one settles the result.
+@visibleForTesting
+Future<web.FileList?> awaitSelection(web.HTMLInputElement input) {
   final completer = Completer<web.FileList?>();
   late final JSFunction changeListener;
-  late final JSFunction focusListener;
+  late final JSFunction cancelListener;
 
-  void cleanup() {
+  void settle(web.FileList? files) {
+    if (completer.isCompleted) return;
     input.removeEventListener('change', changeListener);
-    web.window.removeEventListener('focus', focusListener);
+    input.removeEventListener('cancel', cancelListener);
+    completer.complete(files);
   }
 
-  changeListener = ((web.Event _) {
-    if (completer.isCompleted) return;
-    cleanup();
-    completer.complete(input.files);
-  }).toJS;
-
-  focusListener = ((web.Event _) {
-    // The OS dialog just closed. In every major browser 'change' fires
-    // before focus returns to the page when a selection was made, so if
-    // nothing has arrived shortly after, this was a cancel.
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (completer.isCompleted) return;
-      cleanup();
-      completer.complete(null);
-    });
-  }).toJS;
+  changeListener = ((web.Event _) => settle(input.files)).toJS;
+  cancelListener = ((web.Event _) => settle(null)).toJS;
 
   input.addEventListener('change', changeListener);
-  web.window.addEventListener('focus', focusListener);
+  input.addEventListener('cancel', cancelListener);
   input.click();
 
   return completer.future;

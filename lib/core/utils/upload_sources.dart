@@ -16,8 +16,8 @@ enum UploadSource {
   /// The system file browser, cloud drives included.
   files,
 
-  /// Every photo in one folder. Web only: neither Android nor iOS lets an
-  /// app read a whole folder of photos.
+  /// Every photo in one folder. Web and Android: on iOS, Select in the
+  /// Files picker ([files]) does the same job.
   folder,
 }
 
@@ -28,7 +28,11 @@ List<UploadSource> uploadSourcesFor({
 }) {
   if (isWeb) return const [UploadSource.files, UploadSource.folder];
   return switch (platform) {
-    TargetPlatform.android ||
+    TargetPlatform.android => const [
+      UploadSource.photoLibrary,
+      UploadSource.files,
+      UploadSource.folder,
+    ],
     TargetPlatform.iOS => const [UploadSource.photoLibrary, UploadSource.files],
     _ => const [UploadSource.files],
   };
@@ -68,6 +72,13 @@ List<UploadSource> uploadSourcesFor({
           'Long-press to select several; ⋮ › Select all takes a whole folder.',
       icon: Icons.cloud_outlined,
     ),
+    UploadSource.folder when !isWeb => (
+      title: 'A whole folder',
+      subtitle:
+          'Every photo in a folder on this phone, such as DCIM › Camera; '
+          'then tap the ones to upload, or Select all.',
+      icon: Icons.folder_open,
+    ),
     UploadSource.folder => (
       title: 'A whole folder',
       subtitle:
@@ -87,5 +98,5 @@ String uploadSourcesSummary({
   if (isWeb) return 'From your photos, files or a whole folder';
   return platform == TargetPlatform.iOS
       ? 'From your photos, iCloud Drive or Google Drive'
-      : 'From your photos or Google Drive';
+      : 'From your photos, Google Drive or a whole folder';
 }
