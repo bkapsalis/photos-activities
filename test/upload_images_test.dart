@@ -74,17 +74,20 @@ void main() {
 
     Future<List<PickedImage>> pumpGrid(
       WidgetTester tester, {
-      required int count,
-      required bool selected,
+      int count = 0,
+      bool selected = true,
+      List<PickedImage>? given,
     }) async {
-      final images = [
-        for (var i = 0; i < count; i++)
-          PickedImage.bytes(
-            name: 'photo$i.jpg',
-            bytes: png,
-            selected: selected,
-          ),
-      ];
+      final images =
+          given ??
+          [
+            for (var i = 0; i < count; i++)
+              PickedImage.bytes(
+                name: 'photo$i.jpg',
+                bytes: png,
+                selected: selected,
+              ),
+          ];
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -149,6 +152,30 @@ void main() {
 
       expect(find.text('0 of 4 selected'), findsOneWidget);
       expect(images.any((image) => image.selected), isFalse);
+    });
+
+    testWidgets('a preview that takes no taps, like a Drive photo\'s on the '
+        'web, still ticks its photo when tapped', (tester) async {
+      const previewKey = Key('drive preview');
+      final images = await pumpGrid(
+        tester,
+        given: [
+          PickedImage(
+            name: 'drive.jpg',
+            preview: null,
+            previewBuilder: (_) =>
+                const IgnorePointer(child: SizedBox.expand(key: previewKey)),
+            read: () async => png,
+          ),
+        ],
+      );
+      expect(find.byKey(previewKey), findsOneWidget);
+
+      await tester.tapAt(tester.getCenter(find.byKey(previewKey)));
+      await tester.pump();
+
+      expect(images.single.selected, isFalse);
+      expect(find.text('0 of 1 selected'), findsOneWidget);
     });
   });
 }

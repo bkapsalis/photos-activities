@@ -606,19 +606,23 @@ class _Thumbnail extends StatelessWidget {
       checked: image.selected,
       button: true,
       child: GestureDetector(
+        // The whole tile, even where a preview takes no taps of its own.
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Stack(
           fit: StackFit.expand,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: preview == null
-                  ? placeholder
-                  : Image(
-                      image: preview,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => placeholder,
-                    ),
+              child:
+                  image.previewBuilder?.call(context) ??
+                  (preview == null
+                      ? placeholder
+                      : Image(
+                          image: preview,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => placeholder,
+                        )),
             ),
             if (!image.selected)
               DecoratedBox(

@@ -4,7 +4,7 @@ import 'dart:js_interop_unsafe';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
 import '../config/env_config.dart';
@@ -118,8 +118,47 @@ Future<List<PickedImage>> pickPhotos({required int limit}) async {
   if (token == null) return [];
 
   final picked = await _showPicker(token, limit);
-  return [for (final doc in picked) _drivePhoto(doc, token)];
+  final ids = [for (final doc in picked) (doc['id']! as JSString).toDart];
+  // The picker hands back no previews of Drive files; Drive itself has them.
+  final previews = await Future.wait([
+    for (final id in ids) _previewLink(id, token),
+  ]);
+  return [
+    for (final (i, doc) in picked.indexed)
+      PickedImage(
+        name: (doc['name'] as JSString?)?.toDart ?? 'photo',
+        preview: null,
+        previewBuilder: previews[i] == null
+            ? null
+            : (_) => _drivePreview(previews[i]!),
+        read: () => _download(ids[i], _validToken() ?? token),
+      ),
+  ];
 }
+
+/// Drive's preview at [url], as a plain <img>. Drive's preview server sends
+/// no CORS headers, so Flutter cannot draw the picture itself, and it
+/// refuses pages that say which site is asking, so this one does not.
+///
+/// Taps go to the tile underneath, which ticks the photo: Flutter would
+/// otherwise hand them to the <img>, and the browser would offer to save it.
+Widget _drivePreview(String url) => IgnorePointer(
+  child: HtmlElementView.fromTagName(
+    key: ValueKey(url),
+    tagName: 'img',
+    onElementCreated: (element) {
+      (element as web.HTMLImageElement)
+        ..referrerPolicy = 'no-referrer'
+        // No broken-image icon if it fails; the tile stays blank.
+        ..alt = ''
+        ..src = url
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover'
+        ..style.pointerEvents = 'none';
+    },
+  ),
+);
 
 String? _validToken() =>
     _token != null && DateTime.now().isBefore(_tokenExpires) ? _token : null;
@@ -216,26 +255,30 @@ Future<List<JSObject>> _showPicker(String token, int limit) {
   return done.future;
 }
 
-/// A picked Drive photo: previewed by Google's thumbnail, downloaded only
-/// if it is uploaded.
-PickedImage _drivePhoto(JSObject doc, String token) {
-  final id = (doc['id']! as JSString).toDart;
-  final thumbnails = (doc['thumbnails'] as JSArray<JSObject>?)?.toDart ?? [];
-  final thumbnail = thumbnails.isEmpty
-      ? null
-      : (thumbnails.last['url'] as JSString?)?.toDart;
-  return PickedImage(
-    name: (doc['name'] as JSString?)?.toDart ?? 'photo',
-    // Google's thumbnail server sends no CORS headers, so the browser draws
-    // it as a plain <img>.
-    preview: thumbnail == null
-        ? null
-        : NetworkImage(
-            thumbnail,
-            webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-          ),
-    read: () => _download(id, _validToken() ?? token),
-  );
+/// A link to Drive's preview of photo [id], [PickedImage.previewWidth]
+/// pixels across, or null if it has none or Drive could not be asked. The
+/// link is signed, so it needs no sign-in to show, and lasts some hours.
+/// (The picker's own answer has no previews of Drive files.)
+Future<String?> _previewLink(String id, String token) async {
+  try {
+    final response = await web.window
+        .fetch(
+          'https://www.googleapis.com/drive/v3/files/$id'
+                  '?fields=thumbnailLink&supportsAllDrives=true'
+              .toJS,
+          _withToken(token),
+        )
+        .toDart;
+    if (!response.ok) return null;
+    final file = await response.json().toDart as JSObject;
+    // Links end in the size asked for ("=s220"); any size may be asked.
+    return (file['thumbnailLink'] as JSString?)?.toDart.replaceFirst(
+      RegExp(r'=s\d+$'),
+      '=s${PickedImage.previewWidth}',
+    );
+  } catch (_) {
+    return null; // A photo without a preview is still a photo.
+  }
 }
 
 Future<Uint8List> _download(String id, String token) async {
@@ -244,9 +287,7 @@ Future<Uint8List> _download(String id, String token) async {
         'https://www.googleapis.com/drive/v3/files/$id'
                 '?alt=media&supportsAllDrives=true'
             .toJS,
-        web.RequestInit(
-          headers: {'Authorization': 'Bearer $token'}.jsify()! as JSObject,
-        ),
+        _withToken(token),
       )
       .toDart;
   if (!response.ok) {
@@ -254,3 +295,7 @@ Future<Uint8List> _download(String id, String token) async {
   }
   return (await response.arrayBuffer().toDart).toDart.asUint8List();
 }
+
+web.RequestInit _withToken(String token) => web.RequestInit(
+  headers: {'Authorization': 'Bearer $token'}.jsify()! as JSObject,
+);

@@ -2,6 +2,7 @@ import 'dart:ui' show Codec, ImmutableBuffer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart' show WidgetBuilder;
 
 /// A photo offered for upload, and whether it is ticked to go.
 ///
@@ -14,6 +15,10 @@ class PickedImage {
   /// What the grid shows, or null to show a placeholder.
   final ImageProvider? preview;
 
+  /// Builds the preview instead, for one Flutter cannot draw from an
+  /// [ImageProvider]: a picture the browser may show but not hand over.
+  final WidgetBuilder? previewBuilder;
+
   final Future<Uint8List> Function() _read;
 
   bool selected;
@@ -22,6 +27,7 @@ class PickedImage {
     required this.name,
     required this.preview,
     required Future<Uint8List> Function() read,
+    this.previewBuilder,
     this.selected = true,
   }) : _read = read;
 
