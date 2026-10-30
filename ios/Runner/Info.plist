@@ -54,6 +54,8 @@
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>When you take a photo in the app, your location is saved with it so it can be shown on the map and others can get directions.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>When you take a photo in the app, your location is saved with it so it can be shown on the map and others can get directions. The app never uses your location in the background.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow access to camera to take photos of Bay Area spots.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
