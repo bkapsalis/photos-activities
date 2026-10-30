@@ -8,16 +8,18 @@ import '../../../core/services/firestore_service.dart';
 import '../../../core/services/image_processing_service.dart';
 import '../../../core/services/performance_service.dart';
 import '../../../core/services/photo_metadata_service.dart';
+import '../../../core/services/photo_pickers.dart';
+import '../../../core/services/picked_image.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/upload_sources.dart';
 import '../../../core/widgets/shared_widgets.dart';
 
-/// "Upload Image or Images": choose where the photos come from, then which
-/// of them to upload, then where they were taken.
+/// "Upload Image or Images": choose where the photos come from (this device
+/// or the cloud), then which of them to upload, then where they were taken.
 ///
-/// One photo or fifty go through the same steps. Photos picked one by one
-/// arrive ticked, since picking them was the choice; a folder's arrive
+/// One photo or a folderful go through the same steps. Photos picked one by
+/// one arrive ticked, since picking them was the choice; a folder's arrive
 /// unticked, to be chosen from or taken whole with Select all.
 class UploadImagesDialog extends StatefulWidget {
   final String initialCategory;
@@ -40,7 +42,8 @@ class UploadImagesDialog extends StatefulWidget {
 }
 
 class _UploadImagesDialogState extends State<UploadImagesDialog> {
-  static const int _maxImages = 50;
+  /// Photos on the screen at once: a folder's newest, if it holds more.
+  static const int _maxImages = 200;
 
   final _formKey = GlobalKey<FormState>();
   final _locationNameController = TextEditingController();
@@ -73,6 +76,7 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
     _selectedCategory = categories.contains(widget.initialCategory)
         ? widget.initialCategory
         : categories.first;
+    preparePhotoPickers();
   }
 
   @override
@@ -98,30 +102,12 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
 
     try {
       final picked = switch (source) {
-        UploadSource.photoLibrary => await _storageService.pickLibraryImages(
-          limit: remaining,
-        ),
-        UploadSource.files => await _storageService.pickImageFiles(
-          limit: remaining,
-        ),
-        UploadSource.folder => await _storageService.pickFolderAndScanImages(
-          limit: remaining,
-        ),
+        UploadSource.device => await pickDevicePhotos(limit: remaining),
+        UploadSource.cloud => await pickCloudPhotos(limit: remaining),
       };
       if (!mounted || picked.isEmpty) return;
-      final selected = source != UploadSource.folder;
       setState(() {
-        _images.addAll(
-          picked
-              .take(remaining)
-              .map(
-                (f) => PickedImage(
-                  name: f.name,
-                  bytes: f.bytes,
-                  selected: selected,
-                ),
-              ),
-        );
+        _images.addAll(picked.take(remaining));
         _addingMore = false;
       });
     } catch (e, stack) {
@@ -178,15 +164,16 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
       final img = toUpload[i];
       try {
         final photoId = '${DateTime.now().millisecondsSinceEpoch}_$i';
+        // Read now, one photo at a time: a folder's worth at once would not
+        // fit in a phone's memory.
+        final bytes = await img.read();
 
         // Every source here hands back untouched originals - on Android the
         // document picker is the one route that keeps GPS - so the metadata
         // is read here, before the file is re-encoded for upload.
-        final metadataFromFile = await _metadataService.extract(img.bytes);
-        final aspectRatio = await _storageService.getImageAspectRatio(
-          img.bytes,
-        );
-        final decoded = await decodeImageFromList(img.bytes);
+        final metadataFromFile = await _metadataService.extract(bytes);
+        final aspectRatio = await _storageService.getImageAspectRatio(bytes);
+        final decoded = await decodeImageFromList(bytes);
         final metadata = metadataFromFile.withFallbackSize(
           decoded.width,
           decoded.height,
@@ -197,7 +184,7 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
         // does publishing take" distribution in the dashboard.
         await PerformanceService.trace('photo_upload_total', () async {
           final upload = await _imageProcessing.prepareForUpload(
-            img.bytes,
+            bytes,
             photographer: userProfile.name,
           );
           final imageUrl = await _storageService.uploadBytes(
@@ -289,10 +276,10 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
                 const SizedBox(height: 12),
                 if (_choosingSource) ...[
                   UploadSourceList(
-                    sources: uploadSourcesFor(
-                      isWeb: kIsWeb,
-                      platform: defaultTargetPlatform,
-                    ),
+                    sources: [
+                      UploadSource.device,
+                      if (cloudPhotosAvailable) UploadSource.cloud,
+                    ],
                     enabled: !_isPicking,
                     onPick: _pickFrom,
                   ),
@@ -467,15 +454,6 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
   }
 }
 
-/// A photo picked for upload, and whether it is ticked to go.
-class PickedImage {
-  final String name;
-  final Uint8List bytes;
-  bool selected;
-
-  PickedImage({required this.name, required this.bytes, this.selected = true});
-}
-
 /// The places photos can be picked from, one tappable row each.
 class UploadSourceList extends StatelessWidget {
   final List<UploadSource> sources;
@@ -618,6 +596,11 @@ class _Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final preview = image.preview;
+    const placeholder = ColoredBox(
+      color: AppColors.divider,
+      child: Center(child: Icon(Icons.image_outlined)),
+    );
     return Semantics(
       label: image.name,
       checked: image.selected,
@@ -629,17 +612,13 @@ class _Thumbnail extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.memory(
-                image.bytes,
-                fit: BoxFit.cover,
-                // Decoded small: fifty full-size photos would otherwise sit
-                // in memory at full resolution just to draw thumbnails.
-                cacheWidth: 240,
-                errorBuilder: (_, _, _) => const ColoredBox(
-                  color: AppColors.divider,
-                  child: Icon(Icons.image_outlined),
-                ),
-              ),
+              child: preview == null
+                  ? placeholder
+                  : Image(
+                      image: preview,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => placeholder,
+                    ),
             ),
             if (!image.selected)
               DecoratedBox(

@@ -1,3 +1,4 @@
+import 'package:bills_bay_area/core/services/picked_image.dart';
 import 'package:bills_bay_area/core/utils/upload_sources.dart';
 import 'package:bills_bay_area/features/home/widgets/upload_images_dialog.dart';
 import 'package:flutter/foundation.dart';
@@ -6,68 +7,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 
 void main() {
-  group('uploadSourcesFor', () {
-    test('Android offers its photo library, the file browser and a whole '
-        'folder', () {
-      expect(uploadSourcesFor(isWeb: false, platform: TargetPlatform.android), [
-        UploadSource.photoLibrary,
-        UploadSource.files,
-        UploadSource.folder,
-      ]);
-    });
-
-    test('iOS offers its photo library and Files, where Select takes a '
-        'folder', () {
-      expect(uploadSourcesFor(isWeb: false, platform: TargetPlatform.iOS), [
-        UploadSource.photoLibrary,
-        UploadSource.files,
-      ]);
-    });
-
-    test('the web offers its file dialog and a whole folder', () {
-      // Web on an iPhone reports iOS; it is still a browser.
-      for (final platform in [TargetPlatform.macOS, TargetPlatform.iOS]) {
-        expect(uploadSourcesFor(isWeb: true, platform: platform), [
-          UploadSource.files,
-          UploadSource.folder,
-        ]);
-      }
-    });
-  });
-
   group('describeUploadSource', () {
-    String filesTitle({required bool isWeb, required TargetPlatform p}) =>
-        describeUploadSource(
-          UploadSource.files,
-          isWeb: isWeb,
-          platform: p,
-        ).title;
+    String subtitle(
+      UploadSource source, {
+      required bool isWeb,
+      required TargetPlatform p,
+    }) => describeUploadSource(source, isWeb: isWeb, platform: p).subtitle;
 
-    test('names the drives each platform can reach', () {
+    test('says where "this device" leads on each platform', () {
       expect(
-        filesTitle(isWeb: false, p: TargetPlatform.android),
-        'Google Drive & files',
+        subtitle(UploadSource.device, isWeb: false, p: TargetPlatform.android),
+        'Folders on this phone',
       );
       expect(
-        filesTitle(isWeb: false, p: TargetPlatform.iOS),
-        'iCloud Drive & files',
+        subtitle(UploadSource.device, isWeb: false, p: TargetPlatform.iOS),
+        'Your Photos library',
       );
+      // The web on an iPhone reports iOS; it is still a browser.
       expect(
-        filesTitle(isWeb: true, p: TargetPlatform.macOS),
-        'Photos & files on this device',
+        subtitle(UploadSource.device, isWeb: true, p: TargetPlatform.iOS),
+        'Folders on this computer',
       );
     });
-  });
 
-  test('the upload menu names only the drives this platform reaches', () {
-    expect(
-      uploadSourcesSummary(isWeb: false, platform: TargetPlatform.android),
-      isNot(contains('iCloud')),
-    );
-    expect(
-      uploadSourcesSummary(isWeb: false, platform: TargetPlatform.iOS),
-      contains('iCloud Drive'),
-    );
+    test('names the cloud each platform reaches', () {
+      expect(
+        subtitle(UploadSource.cloud, isWeb: false, p: TargetPlatform.android),
+        'Google Drive',
+      );
+      expect(
+        subtitle(UploadSource.cloud, isWeb: false, p: TargetPlatform.iOS),
+        'iCloud Drive',
+      );
+      expect(
+        subtitle(UploadSource.cloud, isWeb: true, p: TargetPlatform.macOS),
+        'Google Drive',
+      );
+    });
   });
 
   group('UploadSourceList', () {
@@ -78,7 +54,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: UploadSourceList(
-              sources: const [UploadSource.photoLibrary, UploadSource.files],
+              sources: const [UploadSource.device, UploadSource.cloud],
               onPick: (source) => picked = source,
             ),
           ),
@@ -86,8 +62,9 @@ void main() {
       );
 
       expect(find.text('Photos on this device'), findsOneWidget);
-      await tester.tap(find.text('iCloud Drive & files'));
-      expect(picked, UploadSource.files);
+      expect(find.text('Your Photos library'), findsOneWidget);
+      await tester.tap(find.text('Photos from the Cloud'));
+      expect(picked, UploadSource.cloud);
       debugDefaultTargetPlatformOverride = null;
     });
   });
@@ -102,7 +79,11 @@ void main() {
     }) async {
       final images = [
         for (var i = 0; i < count; i++)
-          PickedImage(name: 'photo$i.jpg', bytes: png, selected: selected),
+          PickedImage.bytes(
+            name: 'photo$i.jpg',
+            bytes: png,
+            selected: selected,
+          ),
       ];
       await tester.pumpWidget(
         MaterialApp(

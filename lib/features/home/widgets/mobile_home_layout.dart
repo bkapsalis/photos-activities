@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
@@ -560,12 +559,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                 color: AppColors.primary,
               ),
               title: const Text('Upload Image or Images'),
-              subtitle: Text(
-                uploadSourcesSummary(
-                  isWeb: kIsWeb,
-                  platform: defaultTargetPlatform,
-                ),
-              ),
+              subtitle: const Text(uploadSourcesSummary),
               onTap: () {
                 Navigator.pop(ctx);
                 UploadImagesDialog.show(context, initialCategory: category);

@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:file_picker/file_picker.dart';
 
-import 'folder_picker.dart' as folder_picker;
 import 'crash_reporting.dart';
 import 'media_location_access.dart';
 
@@ -217,68 +216,15 @@ class StorageService {
     }
   }
 
-  /// Pick multiple images from gallery (up to [limit])
-  Future<List<XFile>> pickMultiImage({int limit = 50}) async {
-    final picker = ImagePicker();
-    // image_picker refuses a limit below 2; the list is cut to size below.
-    final images = await picker.pickMultiImage(limit: limit < 2 ? 2 : limit);
-    // Enforce limit client-side as a safety net
-    if (images.length > limit) {
-      return images.sublist(0, limit);
-    }
-    return images;
-  }
-
-  /// Picks photos from the device's photo library, keeping their location.
-  ///
-  /// Android goes through the document picker for the reason
-  /// [pickSingleImage] gives. iOS's library picker keeps GPS as it is.
-  Future<List<PickedFileData>> pickLibraryImages({int limit = 50}) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
-      return pickFilesViaFilePicker(limit: limit);
-    }
-    final list = <PickedFileData>[];
-    for (final image in await pickMultiImage(limit: limit)) {
-      final bytes = await image.readAsBytes();
-      if (bytes.isNotEmpty) {
-        list.add(PickedFileData(name: image.name, bytes: bytes));
-      }
-    }
-    return list;
-  }
-
-  /// Image types offered by the file browser. HEIC is what an iPhone saves.
-  static const _imageFileExtensions = [
-    'jpg',
-    'jpeg',
-    'png',
-    'webp',
-    'heic',
-    'heif',
-  ];
-
-  /// Picks photos through the system file browser, where the cloud drives
-  /// are: Android's document picker (Google Drive in its ☰ menu) and iOS's
-  /// Files (iCloud Drive, Google Drive). On the web the browser's file
-  /// dialog is both this and the photo library.
-  Future<List<PickedFileData>> pickImageFiles({int limit = 50}) =>
-      pickFilesViaFilePicker(limit: limit, fileBrowser: !kIsWeb);
-
-  /// Pick files via FilePicker (allows Cmd+A / Ctrl+A to select all files in
-  /// a folder). [fileBrowser] opens the general file browser by asking for
-  /// image file types; asking for images opens the gallery picker instead.
-  Future<List<PickedFileData>> pickFilesViaFilePicker({
-    int limit = 50,
-    bool fileBrowser = false,
-  }) async {
+  /// Pick files via FilePicker (allows Cmd+A / Ctrl+A to select all files in a folder)
+  Future<List<PickedFileData>> pickFilesViaFilePicker({int limit = 50}) async {
     try {
       // Android hands over photos with their GPS blanked unless the app has
       // asked for photo locations; see MediaLocationAccess.
       final canReadLocation = await MediaLocationAccess.ensure();
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
-        type: fileBrowser ? FileType.custom : FileType.image,
-        allowedExtensions: fileBrowser ? _imageFileExtensions : null,
+        type: FileType.image,
         withData: true,
       );
 
@@ -310,16 +256,5 @@ class StorageService {
       CrashReporting.recordError(e, stack, reason: 'picking files');
       return [];
     }
-  }
-
-  /// Pick an entire folder and load every image file inside it, through
-  /// the browser's folder dialog on the web and Android's folder browser on
-  /// Android (see folder_picker.dart). Throws when the folder cannot be
-  /// read, for the caller to say so: an empty answer means none was chosen.
-  Future<List<PickedFileData>> pickFolderAndScanImages({int limit = 50}) async {
-    final files = await folder_picker.pickFolderImages(limit: limit);
-    return files
-        .map((f) => PickedFileData(name: f.name, bytes: f.bytes))
-        .toList();
   }
 }

@@ -13,6 +13,7 @@ void main() async {
     firebaseProjectId: "photos-activities-staging",
     googleServerClientId:
         "593867148848-hgfqofn0goh79b8bj20l9q75pti5gp9c.apps.googleusercontent.com",
+    googlePickerApiKey: "AIzaSyAD8osU_lVz3M0FFACivv2pbF_DsuZpYb8",
   ));
 
   try {

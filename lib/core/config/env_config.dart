@@ -12,12 +12,24 @@ class EnvConfig {
   /// iOS reads its own client id from GoogleService-Info.plist.
   final String googleServerClientId;
 
+  /// The browser key for Google's Drive picker on the web, or null where it
+  /// is not set up, which leaves the web upload screen without "Photos from
+  /// the Cloud". Not a secret: it is served to every browser, and Google
+  /// accepts it only for the Picker API, only from this app's sites.
+  final String? googlePickerApiKey;
+
   EnvConfig({
     required this.environment,
     required this.title,
     required this.firebaseProjectId,
     required this.googleServerClientId,
+    this.googlePickerApiKey,
   });
+
+  /// The Google Cloud project number, which Drive's picker takes as the app
+  /// id so the files picked are opened to this app. It leads every OAuth
+  /// client id the project issues.
+  String get googleCloudProjectNumber => googleServerClientId.split('-').first;
 
   static late EnvConfig _instance;
 

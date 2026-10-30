@@ -4,6 +4,8 @@ import GoogleMaps
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  private let photoPicker = PhotoPicker()
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -19,5 +21,9 @@ import GoogleMaps
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PhotoPicker") {
+      FlutterMethodChannel(name: PhotoPicker.channelName, binaryMessenger: registrar.messenger())
+        .setMethodCallHandler(photoPicker.handle)
+    }
   }
 }

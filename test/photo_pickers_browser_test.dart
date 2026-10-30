@@ -1,7 +1,7 @@
 @TestOn('browser')
 library;
 
-import 'package:bills_bay_area/core/services/folder_picker_web.dart';
+import 'package:bills_bay_area/core/services/photo_pickers_web.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart' as web;
 

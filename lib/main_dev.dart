@@ -13,6 +13,7 @@ void main() async {
     firebaseProjectId: "photos-activities-dev",
     googleServerClientId:
         "1036671893175-u1tqrdfs780uq10c9dnjk3dqtmnrjaqg.apps.googleusercontent.com",
+    googlePickerApiKey: "AIzaSyAu9OaxAOcuxup7HCUksxFKys9LHKQaaGE",
   ));
 
   try {
