@@ -11,7 +11,9 @@
 /// the upload screen to offer Select all or a tap on each photo wanted.
 /// Where only single photos can be handed over — Google Drive, which gives
 /// apps no folder's contents, and the Photos library — they come back
-/// ticked, chosen in the picker already.
+/// ticked, chosen in the picker already. Drive's pickers close on a single
+/// photo when its name is tapped, so they open again until closed; see
+/// keep_picking.dart.
 ///
 /// Every photo comes back as a preview plus a way to read it in full, which
 /// happens only for those uploaded; see PickedImage.

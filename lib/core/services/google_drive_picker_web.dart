@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
 import '../config/env_config.dart';
+import 'keep_picking.dart';
 import 'picked_image.dart';
 
 /// Google Drive on the web, through Google's own picker.
@@ -19,6 +20,12 @@ import 'picked_image.dart';
 /// this scope Google opens the folder to the app but not the files in it.
 /// Wider access (drive.readonly) is a restricted scope, which Google only
 /// grants after a paid security review.
+///
+/// Google's window lists the photos by name: its pictures of them do not load
+/// inside another site (Google's picture server refuses them, 403, and the
+/// window shows grey checks instead), so the app shows them once picked. A
+/// photo picked alone closes the window, so it opens again, in that photo's
+/// folder, until it is cancelled (see [keepPicking]).
 ///
 /// Needs, in the environment's Google Cloud project: the Google Picker and
 /// Google Drive APIs enabled, [EnvConfig.googlePickerApiKey], and this site
@@ -117,8 +124,20 @@ Future<List<PickedImage>> pickPhotos({required int limit}) async {
   final token = _validToken() ?? await _requestToken();
   if (token == null) return [];
 
-  final picked = await _showPicker(token, limit);
-  final ids = [for (final doc in picked) (doc['id']! as JSString).toDart];
+  final picked = await keepPicking<JSObject>(
+    limit: limit,
+    idOf: _id,
+    pick: ({required chosen, required room, required after}) => _showPicker(
+      _validToken() ?? token,
+      room,
+      folder: (after?['parentId'] as JSString?)?.toDart,
+      // Short enough for one line on a phone: a second runs under the ✕.
+      title: after == null
+          ? 'Choose photos'
+          : keepPickingNote(chosen, toFinish: 'Cancel'),
+    ),
+  );
+  final ids = [for (final doc in picked) _id(doc)];
   // The picker hands back no previews of Drive files; Drive itself has them.
   final previews = await Future.wait([
     for (final id in ids) _previewLink(id, token),
@@ -147,9 +166,14 @@ Widget _drivePreview(String url) => IgnorePointer(
     key: ValueKey(url),
     tagName: 'img',
     onElementCreated: (element) {
-      (element as web.HTMLImageElement)
+      final img = element as web.HTMLImageElement;
+      // Hidden if it fails, leaving the tile's placeholder rather than the
+      // browser's broken-picture icon.
+      img.onerror = ((web.Event _) {
+        img.style.visibility = 'hidden';
+      }).toJS;
+      img
         ..referrerPolicy = 'no-referrer'
-        // No broken-image icon if it fails; the tile stays blank.
         ..alt = ''
         ..src = url
         ..style.width = '100%'
@@ -203,9 +227,16 @@ void _onTokenError(JSObject error) {
   }
 }
 
-/// Shows Google's picker over the page and answers with the documents
-/// picked, or none if it was closed.
-Future<List<JSObject>> _showPicker(String token, int limit) {
+String _id(JSObject doc) => (doc['id']! as JSString).toDart;
+
+/// Shows Google's picker over the page, open at [folder] (or the top of
+/// Drive), and answers with the documents picked, or none if it was closed.
+Future<List<JSObject>> _showPicker(
+  String token,
+  int limit, {
+  required String? folder,
+  required String title,
+}) {
   final done = Completer<List<JSObject>>();
   final view =
       (_picker['DocsView']! as JSFunction).callAsConstructor<JSObject>(
@@ -213,10 +244,11 @@ Future<List<JSObject>> _showPicker(String token, int limit) {
         )
         ..callMethod('setIncludeFolders'.toJS, true.toJS)
         ..callMethod('setMimeTypes'.toJS, _photoTypes.toJS)
-        ..callMethod('setParent'.toJS, 'root'.toJS)
+        ..callMethod('setParent'.toJS, (folder ?? 'root').toJS)
+        // Names and dates: its grid's pictures would not load (see above).
         ..callMethod(
           'setMode'.toJS,
-          (_picker['DocsViewMode']! as JSObject)['GRID'],
+          (_picker['DocsViewMode']! as JSObject)['LIST'],
         );
 
   void onPicked(JSObject data) {
@@ -247,7 +279,7 @@ Future<List<JSObject>> _showPicker(String token, int limit) {
       'setAppId'.toJS,
       EnvConfig.instance.googleCloudProjectNumber.toJS,
     )
-    ..callMethod('setTitle'.toJS, 'Choose photos'.toJS)
+    ..callMethod('setTitle'.toJS, title.toJS)
     ..callMethod('setCallback'.toJS, onPicked.toJS);
   builder
       .callMethod<JSObject>('build'.toJS)

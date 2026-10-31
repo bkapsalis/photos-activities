@@ -54,13 +54,43 @@ void main() {
     answer(
       (_) => [
         {'id': 'content://drive/a', 'name': 'a.jpg'},
+        {'id': 'content://drive/b', 'name': 'b.jpg'},
       ],
     );
 
     final photos = await pickCloudPhotos(limit: 5);
 
     expect(calls.single.method, 'pickCloudPhotos');
-    expect(photos.single.selected, isTrue);
+    expect(photos.every((p) => p.selected), isTrue);
+  });
+
+  test('on Android, a Drive photo picked by its name opens the picker '
+      'again, saying it was added, until the picker is closed', () async {
+    final rounds = [
+      [
+        {'id': 'content://drive/a', 'name': 'a.jpg'},
+      ],
+      [
+        {'id': 'content://drive/b', 'name': 'b.jpg'},
+      ],
+      null,
+    ];
+    answer((_) => rounds.removeAt(0));
+
+    final photos = await pickCloudPhotos(limit: 5);
+
+    expect(photos.map((p) => p.name), ['a.jpg', 'b.jpg']);
+    expect(calls.map((c) => c.arguments), [
+      {'limit': 5},
+      {
+        'limit': 4,
+        'note': '1 photo added. Pick more, or press Back until this closes.',
+      },
+      {
+        'limit': 3,
+        'note': '2 photos added. Pick more, or press Back until this closes.',
+      },
+    ]);
   });
 
   test('on iOS, the cloud is a folder in Files, offered unticked', () async {

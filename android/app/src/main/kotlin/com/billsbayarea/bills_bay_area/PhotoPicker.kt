@@ -10,6 +10,7 @@ import android.graphics.Point
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.widget.Toast
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
@@ -27,7 +28,10 @@ import java.util.concurrent.Executors
  * - "Photos from the Cloud" is Android's document picker, where Google Drive
  *   is. Drive will not hand a whole folder to an app (its folders show "Can't
  *   use this folder" in the folder browser), so there the photos are chosen in
- *   the picker itself: long-press one, then ⋮ › Select all for a whole folder.
+ *   the picker itself: tap a photo's picture to tick it, or long-press one,
+ *   then ⋮ › Select all for a whole folder. Tapping a name instead closes the
+ *   picker with that photo alone; the app then opens it again, in the same
+ *   folder, with a note saying the photo was added (see keep_picking.dart).
  *   The picker opens in the folder of the last Drive photo picked; before
  *   the first, wherever this app last was, with Drive under ☰.
  */
@@ -88,6 +92,9 @@ class PhotoPicker(
         } catch (e: ActivityNotFoundException) {
             result.error("picker", "No picker on this phone", null)
             return
+        }
+        call.argument<String>("note")?.let {
+            Toast.makeText(activity, it, Toast.LENGTH_LONG).show()
         }
         pending = result
         limit = call.argument<Int>("limit") ?: 200

@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'keep_picking.dart';
 import 'media_location_access.dart';
 import 'picked_image.dart';
 
@@ -26,13 +27,26 @@ Future<List<PickedImage>> pickDevicePhotos({required int limit}) {
   return _pickNative('pickDeviceFolder', limit: limit, selected: false);
 }
 
-/// Android: Google Drive, the photos chosen there ticked. iPhone: a folder
+/// Android: Google Drive, the photos chosen there ticked, the picker opening
+/// again after each photo picked alone (see [keepPicking]). iPhone: a folder
 /// in Files, every photo in it unticked.
-Future<List<PickedImage>> pickCloudPhotos({required int limit}) {
+Future<List<PickedImage>> pickCloudPhotos({required int limit}) async {
   if (defaultTargetPlatform == TargetPlatform.iOS) {
     return _pickNative('pickCloudFolder', limit: limit, selected: false);
   }
-  return _pickNative('pickCloudPhotos', limit: limit, selected: true);
+  final found = await keepPicking<Map<Object?, Object?>>(
+    limit: limit,
+    idOf: (photo) => photo['id']!,
+    pick: ({required chosen, required room, required after}) => _findNative(
+      'pickCloudPhotos',
+      limit: room,
+      // Back goes up a folder at a time before it closes the picker.
+      note: after == null
+          ? null
+          : keepPickingNote(chosen, toFinish: 'press Back until this closes'),
+    ),
+  );
+  return [for (final photo in found) _fromNative(photo, selected: true)];
 }
 
 /// The photo library's picker hands over the originals, GPS included.
@@ -54,26 +68,38 @@ Future<List<PickedImage>> _pickFromPhotosLibrary(int limit) async {
   ];
 }
 
-/// Opens the native picker [method] names. Answers empty when nothing was
-/// picked, and throws when what was picked could not be read.
 Future<List<PickedImage>> _pickNative(
   String method, {
   required int limit,
   required bool selected,
 }) async {
+  final found = await _findNative(method, limit: limit);
+  return [for (final photo in found) _fromNative(photo, selected: selected)];
+}
+
+/// Opens the native picker [method] names, with [note] shown over it if
+/// given. Answers empty when nothing was picked, and throws when what was
+/// picked could not be read.
+Future<List<Map<Object?, Object?>>> _findNative(
+  String method, {
+  required int limit,
+  String? note,
+}) async {
   // Without this Android blanks the GPS out of every photo it hands over.
   await MediaLocationAccess.ensure();
   final found = await _channel.invokeListMethod<Map<Object?, Object?>>(method, {
     'limit': limit,
+    'note': ?note,
   });
-  return [
-    for (final photo in found ?? const <Map<Object?, Object?>>[])
-      nativePhoto(
-        id: photo['id']! as String,
-        name: photo['name']! as String,
-        selected: selected,
-      ),
-  ];
+  return found ?? const [];
+}
+
+PickedImage _fromNative(Map<Object?, Object?> photo, {required bool selected}) {
+  return nativePhoto(
+    id: photo['id']! as String,
+    name: photo['name']! as String,
+    selected: selected,
+  );
 }
 
 /// A photo the native side named by [id], previewed and read through it.

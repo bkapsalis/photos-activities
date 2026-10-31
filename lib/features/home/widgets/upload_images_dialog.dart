@@ -614,15 +614,20 @@ class _Thumbnail extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child:
-                  image.previewBuilder?.call(context) ??
-                  (preview == null
-                      ? placeholder
-                      : Image(
-                          image: preview,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => placeholder,
-                        )),
+              child: image.previewBuilder != null
+                  // Over the placeholder, which shows until (or unless) the
+                  // preview loads.
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [placeholder, image.previewBuilder!(context)],
+                    )
+                  : preview == null
+                  ? placeholder
+                  : Image(
+                      image: preview,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => placeholder,
+                    ),
             ),
             if (!image.selected)
               DecoratedBox(

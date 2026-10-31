@@ -177,5 +177,22 @@ void main() {
       expect(images.single.selected, isFalse);
       expect(find.text('0 of 1 selected'), findsOneWidget);
     });
+
+    testWidgets('such a preview has the placeholder behind it, for while it '
+        'loads or if it fails', (tester) async {
+      await pumpGrid(
+        tester,
+        given: [
+          PickedImage(
+            name: 'drive.jpg',
+            preview: null,
+            previewBuilder: (_) => const SizedBox.expand(),
+            read: () async => png,
+          ),
+        ],
+      );
+
+      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+    });
   });
 }
