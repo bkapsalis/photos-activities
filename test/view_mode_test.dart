@@ -86,6 +86,47 @@ void main() {
   });
 
   group('toggling between modes', () {
+    testWidgets('a tap shows the toggle\'s name for a moment, while screen '
+        'readers hear what it does', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _FeedWithToggle(
+          photos: testPhotos(3),
+          initialMode: PhotoViewMode.masonry,
+        ),
+      );
+
+      expect(find.byTooltip('The Alondra Toggle'), findsOneWidget);
+      expect(find.text('The Alondra Toggle'), findsNothing);
+      expect(find.bySemanticsLabel('Switch to carousel view'), findsOneWidget);
+      expect(find.bySemanticsLabel('The Alondra Toggle'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.view_carousel_outlined));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('The Alondra Toggle'), findsOneWidget);
+      expect(find.bySemanticsLabel('Switch to grid view'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.text('The Alondra Toggle'), findsNothing);
+      semantics.dispose();
+    });
+
+    testWidgets('a press and hold shows the name too', (tester) async {
+      await tester.pumpWidget(
+        _FeedWithToggle(
+          photos: testPhotos(3),
+          initialMode: PhotoViewMode.masonry,
+        ),
+      );
+
+      await tester.longPress(find.byIcon(Icons.view_carousel_outlined));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('The Alondra Toggle'), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+    });
+
     testWidgets('switches grid -> carousel -> grid and saves each choice', (
       tester,
     ) async {
@@ -98,20 +139,18 @@ void main() {
 
       expect(find.byKey(const Key('masonry')), findsOneWidget);
       expect(find.byType(PhotoCarouselView), findsNothing);
-      expect(find.byTooltip('Switch to carousel view'), findsOneWidget);
       expect(find.byIcon(Icons.view_carousel_outlined), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Switch to carousel view'));
+      await tester.tap(find.byIcon(Icons.view_carousel_outlined));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('masonry')), findsNothing);
       expect(find.byType(PhotoCarouselView), findsOneWidget);
       expect(find.byKey(const ValueKey('carousel-thumb-p0')), findsOneWidget);
-      expect(find.byTooltip('Switch to grid view'), findsOneWidget);
       expect(find.byIcon(Icons.grid_view), findsOneWidget);
       expect(await ViewModeService().load(), PhotoViewMode.carousel);
 
-      await tester.tap(find.byTooltip('Switch to grid view'));
+      await tester.tap(find.byIcon(Icons.grid_view));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('masonry')), findsOneWidget);
