@@ -45,7 +45,7 @@ void main() {
       );
     });
 
-    test('tells a computer\'s browser, and nothing else, how to pick '
+    test('tells a computer\'s browser and the Android app how to pick '
         'several Drive photos', () {
       String? note(
         UploadSource source, {
@@ -64,7 +64,7 @@ void main() {
         expect(note(UploadSource.cloud, isWeb: true, p: p), both);
         expect(note(UploadSource.device, isWeb: true, p: p), isNull);
       }
-      // A phone's browser, and the apps, have no key to hold.
+      // A phone's browser has no key to hold.
       expect(
         note(UploadSource.cloud, isWeb: true, p: TargetPlatform.iOS),
         isNull,
@@ -73,8 +73,19 @@ void main() {
         note(UploadSource.cloud, isWeb: true, p: TargetPlatform.android),
         isNull,
       );
+      // Android's picker starts ticking with a press and hold.
       expect(
-        note(UploadSource.cloud, isWeb: false, p: TargetPlatform.macOS),
+        note(UploadSource.cloud, isWeb: false, p: TargetPlatform.android),
+        'To pick several: press and hold the first photo until it is '
+        'ticked, then tap the others, then tap Select.',
+      );
+      expect(
+        note(UploadSource.device, isWeb: false, p: TargetPlatform.android),
+        isNull,
+      );
+      // The iPhone's cloud is a folder, chosen from in the app.
+      expect(
+        note(UploadSource.cloud, isWeb: false, p: TargetPlatform.iOS),
         isNull,
       );
     });
@@ -99,6 +110,32 @@ void main() {
       expect(find.text('Your Photos library'), findsOneWidget);
       await tester.tap(find.text('Photos from the Cloud'));
       expect(picked, UploadSource.cloud);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('on Android, says under the cloud how to pick several, '
+        'within a phone\'s width', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UploadSourceList(
+              sources: const [UploadSource.device, UploadSource.cloud],
+              onPick: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      final note = find.textContaining('press and hold the first photo');
+      expect(note, findsOneWidget);
+      expect(
+        tester.getTopLeft(note).dy,
+        greaterThan(tester.getBottomLeft(find.text('Google Drive')).dy),
+      );
       debugDefaultTargetPlatformOverride = null;
     });
   });

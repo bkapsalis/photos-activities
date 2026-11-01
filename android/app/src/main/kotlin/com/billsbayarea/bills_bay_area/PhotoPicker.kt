@@ -28,10 +28,11 @@ import java.util.concurrent.Executors
  * - "Photos from the Cloud" is Android's document picker, where Google Drive
  *   is. Drive will not hand a whole folder to an app (its folders show "Can't
  *   use this folder" in the folder browser), so there the photos are chosen in
- *   the picker itself: tap a photo's picture to tick it, or long-press one,
- *   then ⋮ › Select all for a whole folder. Tapping a name instead closes the
- *   picker with that photo alone; the app then opens it again, in the same
- *   folder, with a note saying the photo was added (see keep_picking.dart).
+ *   the picker itself: press and hold a photo to tick it (in list view,
+ *   tapping its small picture does too), then tap more, or ⋮ › Select all for
+ *   a whole folder. A plain tap with nothing ticked closes the picker with
+ *   that photo alone; the app then opens it again, in the same folder, with
+ *   a note saying the photo was added (see keep_picking.dart).
  *   The picker opens in the folder of the last Drive photo picked; before
  *   the first, wherever this app last was, with Drive under ☰.
  */

@@ -40,19 +40,29 @@ enum UploadSource {
   };
 }
 
-/// What to know before picking from [source], if anything: in a computer's
-/// browser, Google's window takes several photos only with a key held down
-/// while clicking. A phone's browser has no such key, so says nothing.
+/// What to know before picking from [source], if anything: how to pick
+/// several photos in a window the app cannot change.
+///
+/// - Android's, for Drive, ticks a photo only once one is already ticked: a
+///   plain tap before that takes the one photo and closes. Press and hold
+///   starts the ticking, in tiles and list alike.
+/// - Google's, on a computer's browser, takes several photos only with a key
+///   held down while clicking. A phone's browser has no such key.
 String? uploadSourceNote(
   UploadSource source, {
   required bool isWeb,
   required TargetPlatform platform,
 }) {
-  final computer =
-      isWeb &&
-      platform != TargetPlatform.android &&
-      platform != TargetPlatform.iOS;
-  if (source != UploadSource.cloud || !computer) return null;
+  if (source != UploadSource.cloud) return null;
+  if (!isWeb) {
+    return platform == TargetPlatform.android
+        ? 'To pick several: press and hold the first photo until it is '
+              'ticked, then tap the others, then tap Select.'
+        : null;
+  }
+  if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) {
+    return null;
+  }
   return 'Mac users: hold Command (⌘) and click photos to pick several.\n'
       'PC users: hold Ctrl and click photos to pick several.';
 }
