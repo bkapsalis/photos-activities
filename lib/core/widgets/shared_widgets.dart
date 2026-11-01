@@ -252,6 +252,47 @@ class _LocationNameFieldState extends State<LocationNameField> {
   }
 }
 
+/// Whether an upload records where its photos were taken. Off is for a
+/// photo taken somewhere private, like home: its position is then left out
+/// of what is saved, so it is never public. The uploaded file carries none
+/// either way (see ImageProcessingService).
+class IncludeLocationSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  /// Several photos are being uploaded at once.
+  final bool plural;
+
+  const IncludeLocationSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.plural = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      value: value,
+      onChanged: onChanged,
+      title: Text(
+        plural
+            ? 'Include where these photos were taken'
+            : 'Include where this photo was taken',
+      ),
+      subtitle: Text(
+        value
+            ? 'Shown on the map'
+            : plural
+            ? 'Left out: they won\'t appear on the map'
+            : 'Left out: it won\'t appear on the map',
+      ),
+    );
+  }
+}
+
 class ResponsiveLayout extends StatelessWidget {
   final Widget mobileLayout;
   final Widget webLayout;

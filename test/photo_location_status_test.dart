@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bills_bay_area/core/models/photo_metadata.dart';
+import 'package:bills_bay_area/core/widgets/shared_widgets.dart';
 import 'package:bills_bay_area/features/home/widgets/upload_photo_dialog.dart';
 
 void main() {
@@ -44,5 +45,56 @@ void main() {
       find.text('No location — this photo won\'t appear on the map'),
       findsOneWidget,
     );
+  });
+
+  group('IncludeLocationSwitch', () {
+    Future<List<bool>> pumpSwitch(
+      WidgetTester tester, {
+      required bool value,
+      bool plural = false,
+    }) async {
+      final changes = <bool>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: IncludeLocationSwitch(
+              value: value,
+              plural: plural,
+              onChanged: changes.add,
+            ),
+          ),
+        ),
+      );
+      return changes;
+    }
+
+    testWidgets('is on to begin with, and a tap turns it off', (tester) async {
+      final changes = await pumpSwitch(tester, value: true);
+
+      expect(find.text('Include where this photo was taken'), findsOneWidget);
+      expect(find.text('Shown on the map'), findsOneWidget);
+      await tester.tap(find.byType(Switch));
+      expect(changes, [false]);
+    });
+
+    testWidgets('off, says the photo will not map', (tester) async {
+      await pumpSwitch(tester, value: false);
+      expect(
+        find.text('Left out: it won\'t appear on the map'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('speaks of several photos when there are', (tester) async {
+      await pumpSwitch(tester, value: false, plural: true);
+      expect(
+        find.text('Include where these photos were taken'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Left out: they won\'t appear on the map'),
+        findsOneWidget,
+      );
+    });
   });
 }

@@ -67,6 +67,13 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
   /// Bumped on every pick, so a lookup for a photo since replaced is dropped.
   int _pickGeneration = 0;
 
+  /// Off leaves where the photo was taken out of what is saved.
+  bool _includeLocation = true;
+
+  /// What will be saved about the photo, location included or not.
+  PhotoMetadata get _metadataToSave =>
+      _includeLocation ? _metadata : _metadata.withoutLocation();
+
   @override
   void initState() {
     super.initState();
@@ -159,12 +166,14 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
     });
 
     try {
-      // A capture's location may still be arriving. It is bounded by its own
-      // fix timeout; this is only a backstop.
-      await _locationLookup?.timeout(
-        const Duration(seconds: 20),
-        onTimeout: () {},
-      );
+      // A capture's location may still be arriving, unless it is left out.
+      // It is bounded by its own fix timeout; this is only a backstop.
+      if (_includeLocation) {
+        await _locationLookup?.timeout(
+          const Duration(seconds: 20),
+          onTimeout: () {},
+        );
+      }
 
       final photoId = DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -204,7 +213,7 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
         }
 
         final decoded = await decodeImageFromList(_imageBytes!);
-        final metadata = _metadata.withFallbackSize(
+        final metadata = _metadataToSave.withFallbackSize(
           decoded.width,
           decoded.height,
         );
@@ -355,8 +364,17 @@ class _UploadPhotoDialogState extends State<UploadPhotoDialog> {
                 ),
                 if (_imageBytes != null)
                   PhotoLocationStatus(
-                    metadata: _metadata,
-                    finding: _locationLookup != null,
+                    metadata: _metadataToSave,
+                    finding: _includeLocation && _locationLookup != null,
+                  ),
+                // Only when there is a location to leave out.
+                if (_imageBytes != null &&
+                    (_metadata.hasLocation || _locationLookup != null))
+                  IncludeLocationSwitch(
+                    value: _includeLocation,
+                    onChanged: _isUploading
+                        ? null
+                        : (value) => setState(() => _includeLocation = value),
                   ),
                 const SizedBox(height: 16),
 

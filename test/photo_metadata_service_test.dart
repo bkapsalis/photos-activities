@@ -136,6 +136,14 @@ void main() {
       expect(w.cameraMake, 'Pixel');
       expect(w.locationSource, LocationSource.none);
     });
+
+    test('a photo whose location is left out is saved with none', () {
+      final saved = precise.withoutLocation().toFirestore();
+      expect(saved['gps'], isNull);
+      expect(saved['hasLocation'], isFalse);
+      expect(saved['locationSource'], 'none');
+      expect(saved['cameraMake'], 'Pixel');
+    });
   });
 
   group('PhotoMetadata.withDeviceLocation', () {

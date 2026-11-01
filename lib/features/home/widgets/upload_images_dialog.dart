@@ -54,6 +54,9 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
 
   /// Back on the source list to add to photos already picked.
   bool _addingMore = false;
+
+  /// Off leaves where the photos were taken out of what is saved.
+  bool _includeLocation = true;
   bool _isPicking = false;
   bool _isUploading = false;
   int _uploadedCount = 0;
@@ -174,10 +177,11 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
         final metadataFromFile = await _metadataService.extract(bytes);
         final aspectRatio = await _storageService.getImageAspectRatio(bytes);
         final decoded = await decodeImageFromList(bytes);
-        final metadata = metadataFromFile.withFallbackSize(
-          decoded.width,
-          decoded.height,
-        );
+        final metadata =
+            (_includeLocation
+                    ? metadataFromFile
+                    : metadataFromFile.withoutLocation())
+                .withFallbackSize(decoded.width, decoded.height);
         decoded.dispose();
 
         // Same trace name as the camera dialog: both feed one "how long
@@ -399,7 +403,13 @@ class _UploadImagesDialogState extends State<UploadImagesDialog> {
           isDense: true,
         ),
       ),
-      const SizedBox(height: 4),
+      IncludeLocationSwitch(
+        value: _includeLocation,
+        plural: count != 1,
+        onChanged: _isUploading
+            ? null
+            : (value) => setState(() => _includeLocation = value),
+      ),
       if (_errorMessage != null) _error(),
       const SizedBox(height: 12),
 
