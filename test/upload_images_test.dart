@@ -44,6 +44,40 @@ void main() {
         'Google Drive',
       );
     });
+
+    test('tells a computer\'s browser, and nothing else, how to pick '
+        'several Drive photos', () {
+      String? note(
+        UploadSource source, {
+        required bool isWeb,
+        required TargetPlatform p,
+      }) => uploadSourceNote(source, isWeb: isWeb, platform: p);
+
+      const both =
+          'Mac users: hold Command (⌘) and click photos to pick several.\n'
+          'PC users: hold Ctrl and click photos to pick several.';
+      for (final p in [
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      ]) {
+        expect(note(UploadSource.cloud, isWeb: true, p: p), both);
+        expect(note(UploadSource.device, isWeb: true, p: p), isNull);
+      }
+      // A phone's browser, and the apps, have no key to hold.
+      expect(
+        note(UploadSource.cloud, isWeb: true, p: TargetPlatform.iOS),
+        isNull,
+      );
+      expect(
+        note(UploadSource.cloud, isWeb: true, p: TargetPlatform.android),
+        isNull,
+      );
+      expect(
+        note(UploadSource.cloud, isWeb: false, p: TargetPlatform.macOS),
+        isNull,
+      );
+    });
   });
 
   group('UploadSourceList', () {

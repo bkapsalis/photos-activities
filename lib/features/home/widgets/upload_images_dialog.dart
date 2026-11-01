@@ -470,8 +470,9 @@ class UploadSourceList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final source in sources)
+        for (final source in sources) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _SourceTile(
@@ -483,6 +484,23 @@ class UploadSourceList extends StatelessWidget {
               onTap: enabled ? () => onPick(source) : null,
             ),
           ),
+          if (uploadSourceNote(
+                source,
+                isWeb: kIsWeb,
+                platform: defaultTargetPlatform,
+              )
+              case final note?)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                note,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+        ],
       ],
     );
   }
