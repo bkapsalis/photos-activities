@@ -43,10 +43,10 @@ class _ExploreViewState extends State<ExploreView> {
   @override
   void initState() {
     super.initState();
-    _seed = Random().nextInt(1 << 32);
+    _seed = newExploreSeed();
   }
 
-  void _reshuffle() => setState(() => _seed = Random().nextInt(1 << 32));
+  void _reshuffle() => setState(() => _seed = newExploreSeed());
 
   @override
   Widget build(BuildContext context) {

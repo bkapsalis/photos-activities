@@ -12,6 +12,12 @@ import 'photo_sorting.dart';
 /// shuffling is what keeps a single very active location from filling the
 /// screen: a location with 200 photos contributes exactly as many as one
 /// with 3.
+/// A fresh seed for the Explore shuffle. Kept under 2^31 because in a
+/// browser bit shifts are 32-bit: the `1 << 32` once used here was 0 there,
+/// and `nextInt(0)` threw before Explore could show a single photo.
+int newExploreSeed([Random? random]) =>
+    (random ?? Random()).nextInt(0x7fffffff);
+
 extension ExplorePicks on List<PhotoPost> {
   List<PhotoPost> topLikedPerLocation({int perLocation = 2, Random? random}) {
     if (isEmpty) return const [];
