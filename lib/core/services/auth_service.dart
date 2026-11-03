@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/env_config.dart';
 import '../models/models.dart';
@@ -63,12 +62,6 @@ class AuthService {
   bool get isSignedIn => _auth.currentUser != null;
 
   // ── Google Sign-In (v7 API) ────────────────────────────
-
-  /// Google is hidden in the iOS app: App Store guideline 4.8 requires Sign in
-  /// with Apple alongside any third-party login, and Apple is not offered yet.
-  /// kIsWeb is checked first because web on an iPhone also reports iOS.
-  static bool get isGoogleSignInOffered =>
-      kIsWeb || defaultTargetPlatform != TargetPlatform.iOS;
 
   /// google_sign_in 7.x requires initialize() to be awaited exactly once
   /// before any other call on the singleton. Skipping it makes authenticate()
@@ -194,6 +187,11 @@ class AuthService {
   }
 
   // ── Apple Sign-In ──────────────────────────────────────
+  //
+  // Offered everywhere Google is: App Store guideline 4.8 requires it beside
+  // any other company's login in the iOS app. iOS signs in natively, by the
+  // app's bundle ID; Android and the web go through Apple's website, by the
+  // Services ID set in each Firebase project's Apple provider.
 
   /// Apple returns name and email only on the very first authorization, so
   /// both scopes are requested up front.
