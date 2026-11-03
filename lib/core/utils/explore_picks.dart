@@ -1,25 +1,17 @@
-import 'dart:math';
-
 import '../models/models.dart';
 import 'photo_sorting.dart';
 
-/// Builds the Explore feed: the best-liked photos from every location,
-/// shuffled so the order differs each time you open the tab.
+/// Builds the Explore feed: the best-liked photos from every location, most
+/// likes first.
 ///
 /// "Sub category" here means a location name — the same grouping the location
 /// tab strip uses — so every location gets represented no matter how few
 /// photos it has. Taking the top [perLocation] from each group before
-/// shuffling is what keeps a single very active location from filling the
+/// ranking is what keeps a single very active location from filling the
 /// screen: a location with 200 photos contributes exactly as many as one
 /// with 3.
-/// A fresh seed for the Explore shuffle. Kept under 2^31 because in a
-/// browser bit shifts are 32-bit: the `1 << 32` once used here was 0 there,
-/// and `nextInt(0)` threw before Explore could show a single photo.
-int newExploreSeed([Random? random]) =>
-    (random ?? Random()).nextInt(0x7fffffff);
-
 extension ExplorePicks on List<PhotoPost> {
-  List<PhotoPost> topLikedPerLocation({int perLocation = 2, Random? random}) {
+  List<PhotoPost> topLikedPerLocation({int perLocation = 2}) {
     if (isEmpty) return const [];
 
     final byLocation = <String, List<PhotoPost>>{};
@@ -34,9 +26,8 @@ extension ExplorePicks on List<PhotoPost> {
       picks.addAll(group.sortedByPopularity().take(perLocation));
     }
 
-    // Shuffle the picks themselves, not the groups, so two photos from the
-    // same location can land anywhere rather than always side by side.
-    picks.shuffle(random ?? Random());
-    return picks;
+    // Rank the picks themselves too, the way the location tabs rank theirs,
+    // so the grid reads most-liked first across every location.
+    return picks.sortedByPopularity();
   }
 }

@@ -461,7 +461,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
       ),
 
       // FAB with 3 upload options. Only the feed offers uploading: Explore is
-      // a read-only shuffle, and on the map the button sits over the tiles and
+      // read-only, and on the map the button sits over the tiles and
       // pins without belonging to the place being looked at. Only for those
       // allowed to upload; see UploadAccess.
       floatingActionButton: _navIndex != 0
@@ -485,8 +485,10 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
             case 0:
               _resetToHome();
             case 1:
+              // Explore toggles, as on the web: a second tap goes back to the
+              // feed, on the category, location tab and search left there.
               setState(() {
-                _navIndex = 1;
+                _navIndex = _navIndex == 1 ? 0 : 1;
                 _mapReturn = null;
               });
             case 2:

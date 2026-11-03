@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bills_bay_area/core/models/models.dart';
@@ -42,7 +40,7 @@ void main() {
       _photo(id: 'b2', location: 'Rancho', hearts: 2),
     ];
 
-    final picks = photos.topLikedPerLocation(perLocation: 1, random: Random(1));
+    final picks = photos.topLikedPerLocation(perLocation: 1);
 
     expect(picks.map((p) => p.id).toSet(), {'a2', 'b1'});
   });
@@ -56,10 +54,7 @@ void main() {
         _photo(id: 'quiet1', location: 'Quiet Place', hearts: 0),
       ];
 
-      final picks = photos.topLikedPerLocation(
-        perLocation: 2,
-        random: Random(2),
-      );
+      final picks = photos.topLikedPerLocation(perLocation: 2);
 
       // The busy location contributes 2, not 50 — a quiet location is never
       // crowded off the Explore feed.
@@ -89,17 +84,17 @@ void main() {
     expect(picks.map((p) => p.id).toSet(), {'high', 'mid'});
   });
 
-  test('a different seed produces a different order', () {
+  test('picks come most-liked first, across every location', () {
     final photos = [
-      for (var i = 0; i < 12; i++)
-        _photo(id: 'p$i', location: 'Loc$i', hearts: i),
+      _photo(id: 'a1', location: 'Vasona Lake', hearts: 3),
+      _photo(id: 'a2', location: 'Vasona Lake', hearts: 1),
+      _photo(id: 'b1', location: 'Filoli', hearts: 7),
+      _photo(id: 'b2', location: 'Filoli', hearts: 0),
+      _photo(id: 'c1', location: 'Rancho', hearts: 2),
     ];
 
-    final a = photos.topLikedPerLocation(perLocation: 1, random: Random(1));
-    final b = photos.topLikedPerLocation(perLocation: 1, random: Random(7));
-
-    expect(a.length, b.length);
-    expect(a.map((p) => p.id).toList() == b.map((p) => p.id).toList(), isFalse);
+    final picks = photos.topLikedPerLocation(perLocation: 2);
+    expect(picks.map((p) => p.id), ['b1', 'a1', 'c1', 'a2', 'b2']);
   });
 
   test('photos with a blank location name are skipped', () {

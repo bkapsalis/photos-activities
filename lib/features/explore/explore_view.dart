@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
@@ -9,14 +7,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/explore_picks.dart';
 import '../home/widgets/photo_card.dart';
 
-/// The Explore tab: a shuffled mix of the best-liked photo from every
-/// location, across all categories.
-///
-/// The shuffle is deliberately *not* re-rolled on every rebuild. A new seed
-/// is drawn only when you open the tab or pull to refresh, because the photo
-/// list arrives on a Firestore stream — reshuffling per build would make the
-/// grid reorder itself under the reader's thumb every time a heart count
-/// changed somewhere.
+/// The Explore tab: the best-liked photos from every location, across all
+/// categories, most likes first — the same order the location tabs use.
 class ExploreView extends StatefulWidget {
   final Function(String photoId)? onPhotoTap;
 
@@ -32,21 +24,7 @@ class _ExploreViewState extends State<ExploreView> {
   late final Stream<List<PhotoPost>> _photos = FirestoreService()
       .streamAllPhotos();
 
-  /// The shuffle's seed, not a [Random]: each build shuffles with a fresh
-  /// `Random(_seed)`, so every rebuild deals the same order. Sharing one
-  /// Random across builds drew new numbers each time and reordered the grid
-  /// on any rebuild at all.
-  late int _seed;
-
   static const _perLocation = 2;
-
-  @override
-  void initState() {
-    super.initState();
-    _seed = newExploreSeed();
-  }
-
-  void _reshuffle() => setState(() => _seed = newExploreSeed());
 
   @override
   Widget build(BuildContext context) {
@@ -54,35 +32,27 @@ class _ExploreViewState extends State<ExploreView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Best of every location',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const Text(
-                      'Explore',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
+              const Text(
+                'Explore',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.shuffle),
-                tooltip: 'Shuffle',
-                onPressed: _reshuffle,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'The most-liked photos from each location, most likes '
+                  'first.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ),
             ],
           ),
@@ -104,10 +74,7 @@ class _ExploreViewState extends State<ExploreView> {
               }
 
               final picks = (snapshot.data ?? const <PhotoPost>[])
-                  .topLikedPerLocation(
-                    perLocation: _perLocation,
-                    random: Random(_seed),
-                  );
+                  .topLikedPerLocation(perLocation: _perLocation);
 
               if (picks.isEmpty) {
                 return const _ExploreMessage(
@@ -119,38 +86,35 @@ class _ExploreViewState extends State<ExploreView> {
                 );
               }
 
-              return RefreshIndicator(
-                onRefresh: () async => _reshuffle(),
-                // The same view serves phones and the browser, so the column
-                // count follows the width rather than being fixed at 2.
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final crossAxisCount = constraints.maxWidth > 1200
-                        ? 5
-                        : constraints.maxWidth > 900
-                        ? 4
-                        : constraints.maxWidth > 600
-                        ? 3
-                        : 2;
-                    return MasonryGridView.count(
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      crossAxisCount: crossAxisCount,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      itemCount: picks.length,
-                      itemBuilder: (context, index) {
-                        final photo = picks[index];
-                        return PhotoCard(
-                          photo: photo,
-                          onTap: () => widget.onPhotoTap?.call(photo.id),
-                        );
-                      },
-                    );
-                  },
-                ),
+              // The same view serves phones and the browser, so the column
+              // count follows the width rather than being fixed at 2.
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final crossAxisCount = constraints.maxWidth > 1200
+                      ? 5
+                      : constraints.maxWidth > 900
+                      ? 4
+                      : constraints.maxWidth > 600
+                      ? 3
+                      : 2;
+                  return MasonryGridView.count(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: picks.length,
+                    itemBuilder: (context, index) {
+                      final photo = picks[index];
+                      return PhotoCard(
+                        photo: photo,
+                        onTap: () => widget.onPhotoTap?.call(photo.id),
+                      );
+                    },
+                  );
+                },
               );
             },
           ),
