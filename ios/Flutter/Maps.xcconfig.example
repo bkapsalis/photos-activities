@@ -1,0 +1,3 @@
+// Copy this file to Maps.xcconfig and paste your key.
+// Maps.xcconfig is gitignored so the key is never committed.
+MAPS_API_KEY=

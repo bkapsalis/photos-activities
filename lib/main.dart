@@ -7,4 +7,8 @@
 // For web (no native flavors):
 //   flutter run -d chrome -t lib/main_dev.dart
 
-export 'main_dev.dart';
+import 'main_dev.dart' as dev;
+
+void main() {
+  dev.main();
+}
