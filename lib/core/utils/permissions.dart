@@ -4,8 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 /// a location tab.
 ///
 /// Mirrors the list in firestore.rules and storage.rules, which are what
-/// actually enforce it. The app checks only so it never offers an action the
-/// server will refuse; keep all three lists in sync.
+/// actually enforce it, and in functions/src/config.ts, which decides who
+/// may use the AI. The app checks only so it never offers an action the
+/// server will refuse; keep all four lists in sync.
 const adminEmails = {'bkapsalis@gmail.com'};
 
 /// True for a moderator. Like the rules, it requires the email to be

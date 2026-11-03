@@ -235,6 +235,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── AI checks: photoAnalysis/{photoId} ─────────────
+    // What the AI saw in each photo: the safety verdict, the animals, and
+    // whether those have been posted as comments. Written only by Cloud
+    // Functions (functions/src), which the rules do not govern; read only by
+    // moderators, since a verdict on someone's photo is not for everyone.
+    match /photoAnalysis/{photoId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Chat Messages (Location Chat) ──────────────────
     match /chats/{locationId}/messages/{messageId} {
       allow read: if true;

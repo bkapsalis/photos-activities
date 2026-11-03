@@ -16,6 +16,7 @@ import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
 import '../home/widgets/full_screen_photo_view.dart';
 import '../map/photo_location_screen.dart';
+import 'ai_widgets.dart';
 
 class PictureChatScreen extends StatelessWidget {
   final String photoId;
@@ -378,6 +379,16 @@ class _MobilePictureChat extends StatelessWidget {
                       ),
                     ),
 
+                    // Moderators only: each look by the AI costs money.
+                    if (isAdmin())
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimalInfoButton(photoId: photo.id),
+                        ),
+                      ),
+
                     // Comments stream
                     Expanded(child: _Comments(photoId: photo.id)),
 
@@ -667,16 +678,31 @@ class _WebPictureModal extends StatelessWidget {
                     width: chatWidth,
                     child: Column(
                       children: [
-                        // Close button
-                        Container(
+                        // Close button, beside the moderator's AI button.
+                        Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,
                           ),
-                          alignment: Alignment.centerRight,
-                          child: IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: onClose ?? () => Navigator.pop(context),
+                          child: Row(
+                            children: [
+                              // Moderators only: each look by the AI costs
+                              // money.
+                              if (isAdmin())
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: AnimalInfoButton(photoId: photo.id),
+                                  ),
+                                )
+                              else
+                                const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 20),
+                                onPressed:
+                                    onClose ?? () => Navigator.pop(context),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -788,6 +814,15 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (comment.isAi) {
+      // Only a moderator passes canModify for the AI's comments.
+      return AiCommentTile(
+        comment: comment,
+        onDelete: canModify(comment.user.id)
+            ? () => _confirmAndDelete(context)
+            : null,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(

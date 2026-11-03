@@ -8,6 +8,7 @@ import '../../core/services/crash_reporting.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/widgets/shared_widgets.dart';
+import '../picture_chat/animal_batch_dialog.dart';
 import '../profile/profile_screen.dart';
 import 'upgrade_account_screen.dart';
 
@@ -89,6 +90,21 @@ class AccountButton extends StatelessWidget {
                   ),
                 ),
               ),
+            // Moderators: the AI's animal comments, for every photo at once.
+            if (isAdmin(user))
+              const PopupMenuItem<String>(
+                value: 'animals',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.pets, size: 20),
+                  title: Text('Check all photos for animals'),
+                  subtitle: Text(
+                    'Adds AI comments about them',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
             // Dev, and moderators on staging: proves crash reports reach
             // that environment's Crashlytics.
             if (CrashReporting.supported &&
@@ -151,6 +167,11 @@ class AccountButton extends StatelessWidget {
           ),
         );
       }
+      return;
+    }
+
+    if (value == 'animals') {
+      await AnimalBatchDialog.show(context);
       return;
     }
 

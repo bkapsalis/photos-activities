@@ -206,6 +206,22 @@ await check('only admin can write locations', async () => {
   await assertSucceeds(setDoc(doc(admin().firestore(), 'locations/x'), { name: 'x' }));
 });
 
+console.log('Firestore — AI checks');
+await reset();
+await seed((db) => setDoc(doc(db, 'photoAnalysis/p1'), { status: 'done', flagged: false, animals: [] }));
+await check('only a moderator can read what the AI saw', async () => {
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'photoAnalysis/p1')));
+  await assertFails(getDoc(doc(alice().firestore(), 'photoAnalysis/p1')));
+  await assertFails(getDoc(doc(fakeAdmin().firestore(), 'photoAnalysis/p1')));
+  await assertFails(getDoc(doc(anon().firestore(), 'photoAnalysis/p1')));
+});
+await check('nobody, the moderator included, can write it from the app', async () => {
+  await assertFails(setDoc(doc(admin().firestore(), 'photoAnalysis/p2'), { status: 'done' }));
+  await assertFails(updateDoc(doc(admin().firestore(), 'photoAnalysis/p1'), { flagged: true }));
+  await assertFails(deleteDoc(doc(admin().firestore(), 'photoAnalysis/p1')));
+  await assertFails(setDoc(doc(alice().firestore(), 'photoAnalysis/p2'), { status: 'done' }));
+});
+
 console.log('Firestore — comments & chat');
 await reset();
 await check('user can comment as themselves', () => assertSucceeds(commentBatch(bob(), 'p1', post('bob'))));
@@ -223,6 +239,11 @@ await check('comment text must be text', () => assertFails(commentBatch(bob(), '
 await check('a comment cannot carry its own time', () => assertFails(commentBatch(bob(), 'p1', post('bob', { timestamp: new Date('2030-01-01') }))));
 await check('a comment cannot start with likes', () => assertFails(commentBatch(bob(), 'p1', post('bob', { heartCount: 9 }))));
 await check('a comment cannot add fields the app does not write', () => assertFails(commentBatch(bob(), 'p1', post('bob', { isMe: true }))));
+await check('nobody can pass a comment off as the AI\'s', async () => {
+  await assertFails(commentBatch(bob(), 'p1', post('bob', { ai: true })));
+  await assertFails(commentBatch(bob(), 'p1', post('bob', { userId: 'ai-naturalist', userName: 'AI Naturalist' })));
+  await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { ai: true }));
+});
 await check('an author cannot change who wrote a comment or when', async () => {
   await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { userId: 'alice' }));
   await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { timestamp: new Date('2030-01-01') }));

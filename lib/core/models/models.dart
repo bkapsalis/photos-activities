@@ -296,6 +296,47 @@ class ChatMessage {
   }
 }
 
+/// The author of every comment the AI posts. No Firebase account has this
+/// uid. Keep in sync with AI_AUTHOR in functions/src/config.ts.
+const aiNaturalistId = 'ai-naturalist';
+
+/// An animal the AI named in a photo, carried on its AI comment.
+class AiAnimal {
+  final String commonName;
+  final String scientificName;
+
+  /// How sure the AI was of the identification: 'high', 'medium' or 'low'.
+  final String confidence;
+  final String description;
+
+  const AiAnimal({
+    required this.commonName,
+    required this.scientificName,
+    required this.confidence,
+    required this.description,
+  });
+
+  /// A low-confidence identification, shown as "Possibly …".
+  bool get isUncertain => confidence != 'high' && confidence != 'medium';
+
+  /// Null unless [data] is an animal as the server writes one.
+  static AiAnimal? fromFirestore(Object? data) {
+    if (data is! Map) return null;
+    final commonName = data['commonName'];
+    final scientificName = data['scientificName'];
+    final confidence = data['confidence'];
+    final description = data['description'];
+    if (commonName is! String || commonName.isEmpty) return null;
+    if (description is! String) return null;
+    return AiAnimal(
+      commonName: commonName,
+      scientificName: scientificName is String ? scientificName : '',
+      confidence: confidence is String ? confidence : 'low',
+      description: description,
+    );
+  }
+}
+
 class Comment {
   final String id;
   final UserProfile user;
@@ -303,12 +344,22 @@ class Comment {
   final String timestamp;
   final int heartCount;
 
+  /// Posted by the AI (Cloud Functions), not a person. firestore.rules keep
+  /// people from writing the field, so the badge cannot be faked.
+  final bool isAi;
+
+  /// The animal an AI comment is about. Its [text] says the same in one
+  /// string, which is all an app version from before AI comments shows.
+  final AiAnimal? animal;
+
   const Comment({
     required this.id,
     required this.user,
     required this.text,
     required this.timestamp,
     this.heartCount = 0,
+    this.isAi = false,
+    this.animal,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -340,12 +391,15 @@ class Comment {
       }
     }
 
+    final isAi = data['ai'] == true && data['userId'] == aiNaturalistId;
     return Comment(
       id: doc.id,
       user: user,
       text: data['text'] as String? ?? '',
       timestamp: formattedTime,
       heartCount: (data['heartCount'] as num?)?.toInt() ?? 0,
+      isAi: isAi,
+      animal: isAi ? AiAnimal.fromFirestore(data['animal']) : null,
     );
   }
 
