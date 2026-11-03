@@ -10,7 +10,7 @@ workflows:
         - pattern: dev
           include: true
     environment:
-      flutter: 3.47.1
+      flutter: 3.47.9
     scripts:
       - name: Get dependencies
         script: flutter pub get
@@ -51,7 +51,7 @@ workflows:
         - pattern: staging
           include: true
     environment:
-      flutter: 3.47.1
+      flutter: 3.47.9
       xcode: latest
       groups:
         - staging
