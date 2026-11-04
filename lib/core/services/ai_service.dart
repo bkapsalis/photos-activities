@@ -9,8 +9,10 @@ class AiService {
       FirebaseFunctions.instanceFor(region: 'us-west1');
 
   /// Posts the animals in [photoId] as AI comments, having the AI look at
-  /// the photo first if it has not yet. Throws [FirebaseFunctionsException]
-  /// with a message fit to show when it could not.
+  /// the photo first if it has not yet. Once a moderator has deleted any of
+  /// them, the AI looks afresh and the missing ones are posted again. Throws
+  /// [FirebaseFunctionsException] with a message fit to show when it could
+  /// not.
   Future<AnimalInfoOutcome> describeAnimals(String photoId) async {
     final result = await _functions
         .httpsCallable(
@@ -73,7 +75,8 @@ class AnimalInfoOutcome {
     AnimalInfoStatus.alreadyPosted when count == 0 =>
       'Already checked: the AI found no animals in this photo.',
     AnimalInfoStatus.alreadyPosted =>
-      "This photo's animals are already in the comments.",
+      "This photo's animals are already in the comments. Delete one to have "
+          'the AI look again.',
   };
 }
 

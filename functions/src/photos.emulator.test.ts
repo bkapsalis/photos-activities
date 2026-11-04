@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { deleteApp, initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
 import { Animal } from "./analysis";
@@ -92,6 +92,18 @@ describe("posting AI comments", { skip: !emulated }, () => {
 
   const comments = (id: string) =>
     db().collection("comments").doc(id).collection("messages").get();
+
+  /** A moderator deleting the AI's comment on [animal], as the app does. */
+  async function deleteComment(id: string, animal: string): Promise<void> {
+    const match = (await comments(id)).docs.find(
+      (doc) => doc.data().animal?.commonName === animal,
+    );
+    await match!.ref.delete();
+    await db()
+      .collection("photos")
+      .doc(id)
+      .update({ commentCount: FieldValue.increment(-1) });
+  }
   const photo = async (id: string) =>
     (await db().collection("photos").doc(id).get()).data()!;
   const analysis = async (id: string) =>
@@ -156,6 +168,82 @@ describe("posting AI comments", { skip: !emulated }, () => {
     assert.equal(again.status, "alreadyPosted");
     assert.equal((await comments("p1")).size, 1);
     assert.equal((await photo("p1")).commentCount, 1);
+  });
+
+  it("brings back a deleted comment from a fresh look", async () => {
+    await addPhoto("p1");
+    const model = fakeModel([heron, squirrel]);
+    await postAnimalComments("p1", model);
+
+    // Asked again with every comment there: nothing to do, nothing paid.
+    const unchanged = await postAnimalComments("p1", model);
+    assert.equal(unchanged.status, "alreadyPosted");
+    assert.equal(model.calls, 1);
+
+    await deleteComment("p1", "Great Blue Heron");
+    const outcome = await postAnimalComments("p1", model);
+
+    assert.deepEqual(outcome, {
+      status: "posted",
+      count: 1,
+      names: ["Great Blue Heron"],
+    });
+    assert.equal(model.calls, 2);
+    const names = (await comments("p1")).docs.map(
+      (doc) => doc.data().animal.commonName,
+    );
+    assert.deepEqual(names.sort(), ["Great Blue Heron", "Western Gray Squirrel"]);
+    assert.equal((await photo("p1")).commentCount, 2);
+    assert.equal((await analysis("p1"))?.animalComments?.count, 2);
+    assert.equal(
+      (await postAnimalComments("p1", model)).status,
+      "alreadyPosted",
+    );
+  });
+
+  it("brings a deleted comment back only once when asked twice at once", async () => {
+    await addPhoto("p1");
+    const model = fakeModel([heron]);
+    await postAnimalComments("p1", model);
+    await deleteComment("p1", "Great Blue Heron");
+
+    const outcomes = await Promise.all([
+      postAnimalComments("p1", model),
+      postAnimalComments("p1", model),
+    ]);
+
+    assert.deepEqual(
+      outcomes.map((o) => o.status).sort(),
+      ["alreadyPosted", "posted"],
+    );
+    assert.equal((await comments("p1")).size, 1);
+    assert.equal((await photo("p1")).commentCount, 1);
+  });
+
+  it("says so when a fresh look finds nothing new", async () => {
+    await addPhoto("p1");
+    await postAnimalComments("p1", fakeModel([heron, squirrel]));
+    await deleteComment("p1", "Western Gray Squirrel");
+
+    const outcome = await postAnimalComments("p1", fakeModel([heron]));
+
+    assert.deepEqual(outcome, {
+      status: "alreadyPosted",
+      count: 1,
+      names: ["Great Blue Heron"],
+    });
+    assert.equal((await comments("p1")).size, 1);
+    assert.equal((await analysis("p1"))?.animalComments?.count, 1);
+  });
+
+  it("looks again at a photo where it found no animals", async () => {
+    await addPhoto("p1");
+    await postAnimalComments("p1", fakeModel([]));
+
+    const outcome = await postAnimalComments("p1", fakeModel([heron]));
+
+    assert.equal(outcome.status, "posted");
+    assert.equal((await comments("p1")).size, 1);
   });
 
   it("reuses the upload-time look instead of asking the model again", async () => {

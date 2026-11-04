@@ -1,8 +1,10 @@
 import {
   DocumentData,
+  DocumentSnapshot,
   FieldValue,
   getFirestore,
   Timestamp,
+  Transaction,
 } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
@@ -25,7 +27,10 @@ export interface StoredAnalysis {
   usage?: Usage;
   /** Why it failed, for status "failed". */
   error?: string;
-  /** Set once the animals have been posted as comments (even none). */
+  /**
+   * The AI comments last posted (even none). A moderator may have deleted
+   * some since; the ids are checked before anything is posted again.
+   */
   animalComments?: {
     postedAt: Timestamp;
     count: number;
@@ -148,8 +153,13 @@ export async function analyzePhoto(
 
 /**
  * Posts one AI comment per animal in the photo, looking at it first if that
- * has not happened yet. Runs at most once per photo: a second request, or
- * two at once, gets "alreadyPosted".
+ * has not happened yet.
+ *
+ * Asked again while all its comments are still there, it says so and costs
+ * nothing. Once a moderator has deleted any of them, or if it found no
+ * animals, the model looks afresh and the animals no remaining AI comment
+ * covers are posted: that is how a deleted comment is regenerated. Two
+ * requests at once post only once.
  */
 export async function postAnimalComments(
   photoId: string,
@@ -162,8 +172,18 @@ export async function postAnimalComments(
   const existing = (await analysisRef(photoId).get()).data() as
     | StoredAnalysis
     | undefined;
-  if (existing?.animalComments) return alreadyPosted(existing);
-  if (existing?.status !== "done") {
+  const earlier = existing?.animalComments;
+  if (earlier) {
+    const ids = earlier.commentIds;
+    if (
+      ids.length > 0 &&
+      (await keptComments(photoId, ids)).length === ids.length
+    ) {
+      return alreadyPosted(existing);
+    }
+    // A fresh look, not the answer behind the comments that were deleted.
+    await analyzePhoto(photoId, photo.data()!, analyze);
+  } else if (existing?.status !== "done") {
     await analyzePhoto(photoId, photo.data()!, analyze);
   }
 
@@ -176,10 +196,19 @@ export async function postAnimalComments(
       throw new PhotoProblem("That photo no longer exists.", "notFound");
     }
     const analysis = analysisSnap.data() as StoredAnalysis;
-    if (analysis.animalComments) return alreadyPosted(analysis);
+    // Another request posted while this one was looking.
+    if (!samePosting(analysis.animalComments, earlier)) {
+      return alreadyPosted(analysis);
+    }
 
-    const animals = analysis.animals ?? [];
-    const commentIds: string[] = [];
+    const kept = await keptComments(photoId, earlier?.commentIds ?? [], tx);
+    const covered = new Set(
+      kept.flatMap((snap) => namesOf(snap.get("animal"))),
+    );
+    const animals = (analysis.animals ?? []).filter(
+      (animal) => !namesOf(animal).some((name) => covered.has(name)),
+    );
+    const commentIds = kept.map((snap) => snap.id);
     for (const animal of animals) {
       const comment = commentsRef(photoId).doc();
       commentIds.push(comment.id);
@@ -205,16 +234,55 @@ export async function postAnimalComments(
     tx.update(analysisRef(photoId), {
       animalComments: {
         postedAt: FieldValue.serverTimestamp(),
-        count: animals.length,
+        count: commentIds.length,
         commentIds,
       },
     });
+    if (animals.length > 0) {
+      return {
+        status: "posted",
+        count: animals.length,
+        names: animals.map((animal) => animal.commonName),
+      };
+    }
+    // The fresh look found only animals whose comments are still there.
     return {
-      status: animals.length > 0 ? "posted" : "noAnimals",
-      count: animals.length,
-      names: animals.map((animal) => animal.commonName),
+      status: kept.length > 0 ? "alreadyPosted" : "noAnimals",
+      count: kept.length,
+      names: kept.flatMap((snap) => snap.get("animal.commonName") ?? []),
     };
   });
+}
+
+/** Those of the photo's comments [ids] that nobody has deleted. */
+async function keptComments(
+  photoId: string,
+  ids: string[],
+  tx?: Transaction,
+): Promise<DocumentSnapshot[]> {
+  if (ids.length === 0) return [];
+  const refs = ids.map((id) => commentsRef(photoId).doc(id));
+  const snaps = await (tx ? tx.getAll(...refs) : db().getAll(...refs));
+  return snaps.filter((snap) => snap.exists);
+}
+
+/** Whether [now] is still the posting this request saw at its start. */
+function samePosting(
+  now: StoredAnalysis["animalComments"],
+  seen: StoredAnalysis["animalComments"],
+): boolean {
+  if (!now || !seen) return !now && !seen;
+  return now.postedAt.isEqual(seen.postedAt);
+}
+
+/**
+ * The names an animal goes by, either of which marks it as one a kept
+ * comment already covers: a fresh look may word the other differently.
+ */
+function namesOf(animal: Partial<Animal> | undefined): string[] {
+  return [animal?.scientificName, animal?.commonName]
+    .filter((name): name is string => typeof name === "string" && name !== "")
+    .map((name) => name.toLowerCase());
 }
 
 function alreadyPosted(analysis: StoredAnalysis): AnimalCommentsOutcome {

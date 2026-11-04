@@ -95,7 +95,8 @@ void main() {
           'status': 'alreadyPosted',
           'count': 3,
         }).message,
-        "This photo's animals are already in the comments.",
+        "This photo's animals are already in the comments. Delete one to "
+        'have the AI look again.',
       );
       expect(
         AnimalInfoOutcome.fromJson({
