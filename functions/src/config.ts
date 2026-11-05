@@ -22,6 +22,14 @@ export const REGION = "us-west1";
  */
 export const ADMIN_EMAILS = ["bkapsalis@gmail.com"];
 
+/** Whether a caller's ID token is a moderator's: a verified listed email. */
+export function isModerator(
+  token: { email?: string; email_verified?: boolean } | undefined,
+): boolean {
+  const email = String(token?.email ?? "").toLowerCase();
+  return token?.email_verified === true && ADMIN_EMAILS.includes(email);
+}
+
 /**
  * The author on every AI comment. No Firebase account has this uid, so no
  * person can post as it; the app badges comments carrying it.

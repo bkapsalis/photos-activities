@@ -122,7 +122,7 @@ class AccountButton extends StatelessWidget {
                   ),
                 ),
               ),
-            // Dev, and moderators on staging: proves crash reports reach
+            // Moderators, on dev and staging: proves crash reports reach
             // that environment's Crashlytics.
             if (CrashReporting.supported &&
                 CrashReporting.offersTestCrash(

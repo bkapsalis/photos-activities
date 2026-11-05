@@ -70,13 +70,12 @@ class CrashReporting {
     }
   }
 
-  /// Whether [testCrash] is offered: to anyone in dev, and to a moderator in
-  /// staging, to check that environment's reports arrive before a release.
-  /// Never in prod, where every crash in the console should be a real one.
+  /// Whether [testCrash] is offered: to a moderator in dev and staging, to
+  /// check that environment's reports arrive before a release. Never in
+  /// prod, where every crash in the console should be a real one.
   static bool offersTestCrash(Environment environment, {required bool admin}) =>
       switch (environment) {
-        Environment.dev => true,
-        Environment.staging => admin,
+        Environment.dev || Environment.staging => admin,
         Environment.prod => false,
       };
 

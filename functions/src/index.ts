@@ -10,6 +10,9 @@
  * flagged comment or chat message (checkComment, checkChatMessage).
  * Moderators review what was taken down, and put it back or delete it for
  * good (restoreRemovedPost, discardRemovedPost).
+ *
+ * Anyone may delete their own account and everything in it
+ * (deleteMyAccount).
  */
 import { initializeApp } from "firebase-admin/app";
 import * as logger from "firebase-functions/logger";
@@ -24,7 +27,8 @@ import {
 } from "firebase-functions/v2/firestore";
 import { CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 
-import { ADMIN_EMAILS, REGION } from "./config";
+import { deleteAccount, deletionRefusal } from "./account";
+import { isModerator, REGION } from "./config";
 import { analyzeWithGemini, checkTextWithGemini } from "./model";
 import {
   checkPost,
@@ -202,13 +206,38 @@ export const describeAnimalsBatch = onCall(
 );
 
 /**
+ * "Delete account" in the app's Profile: everything the caller put in,
+ * then the account itself. The app has them sign in again first.
+ */
+export const deleteMyAccount = onCall(
+  { timeoutSeconds: 300 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+    const refusal = deletionRefusal(request.auth.token, Date.now() / 1000);
+    if (refusal) throw new HttpsError("failed-precondition", refusal);
+    const uid = request.auth.uid;
+    try {
+      const deleted = await deleteAccount(uid);
+      logger.info("Deleted an account", { uid, ...deleted });
+    } catch (error) {
+      logger.error("Could not delete an account", { uid, error });
+      throw new HttpsError(
+        "unavailable",
+        "Your account could not be deleted just now. Please try again.",
+      );
+    }
+    return { ok: true };
+  },
+);
+
+/**
  * Only moderators may spend money on the model. Matched as firestore.rules
  * match them: on a verified email.
  */
 function requireModerator(request: CallableRequest): void {
-  const token = request.auth?.token;
-  const email = String(token?.email ?? "").toLowerCase();
-  if (token?.email_verified !== true || !ADMIN_EMAILS.includes(email)) {
+  if (!isModerator(request.auth?.token)) {
     throw new HttpsError("permission-denied", "Only a moderator can do this.");
   }
 }
