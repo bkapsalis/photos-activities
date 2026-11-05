@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugPrint, defaultTargetPlatform, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config/env_config.dart';
 import '../models/models.dart';
@@ -26,6 +27,9 @@ class AuthResult {
 
   bool get isSuccess => error == null;
 }
+
+/// How someone proves it is them again before deleting their account.
+enum ConfirmMethod { google, apple, password }
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -484,6 +488,139 @@ class AuthService {
         return 'Sign-in was cancelled.';
       default:
         return _failed(e, 'Could not create your account. Please try again.');
+    }
+  }
+
+  // ── Confirming It's You ────────────────────────────────
+
+  /// How someone signed in with [providerIds] confirms it is them: the
+  /// first of their methods that needs no typing, else their password.
+  /// Null for a guest, who has nothing to sign in with again.
+  static ConfirmMethod? confirmMethodFor({
+    required bool isAnonymous,
+    required Iterable<String> providerIds,
+  }) {
+    if (isAnonymous) return null;
+    final ids = providerIds.toSet();
+    if (ids.contains('google.com')) return ConfirmMethod.google;
+    if (ids.contains('apple.com')) return ConfirmMethod.apple;
+    if (ids.contains('password')) return ConfirmMethod.password;
+    return null;
+  }
+
+  /// Signs the reader in again by [method], which deleting their account
+  /// needs: the deleteMyAccount function refuses a sign-in more than a few
+  /// minutes old, as Firebase itself does.
+  ///
+  /// For Apple it also revokes the app's access to their Apple ID, which App
+  /// Store guideline 5.1.1(v) asks of an app offering Sign in with Apple.
+  /// Apple hands over what the revoke needs only at a sign-in, so it happens
+  /// here, before the account is gone.
+  Future<AuthResult> confirmIdentity(
+    ConfirmMethod method, {
+    String password = '',
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return AuthResult.failure('You are not signed in.');
+    try {
+      switch (method) {
+        case ConfirmMethod.google:
+          await _reauthenticateWithGoogle(user);
+        case ConfirmMethod.apple:
+          await _reauthenticateWithApple(user);
+        case ConfirmMethod.password:
+          final email = user.email;
+          if (email == null) {
+            return AuthResult.failure(
+              _unavailable('A password account has no email'),
+            );
+          }
+          await user.reauthenticateWithCredential(
+            EmailAuthProvider.credential(email: email, password: password),
+          );
+      }
+      return AuthResult.success(_auth.currentUser);
+    } on GoogleSignInException catch (e) {
+      return AuthResult.failure(_googleErrorMessage(e));
+    } on FirebaseAuthException catch (e) {
+      return AuthResult.failure(_confirmErrorMessage(e, method));
+    } catch (e) {
+      return AuthResult.failure(
+        _failed(e, 'We could not confirm it is you. Please try again.'),
+      );
+    }
+  }
+
+  Future<void> _reauthenticateWithGoogle(User user) async {
+    if (kIsWeb) {
+      await user.reauthenticateWithPopup(GoogleAuthProvider());
+      return;
+    }
+    await _ensureGoogleReady();
+    final googleUser = await GoogleSignIn.instance.authenticate();
+    final idToken = googleUser.authentication.idToken;
+    if (idToken == null) {
+      throw StateError('Google returned no ID token');
+    }
+    await user.reauthenticateWithCredential(
+      GoogleAuthProvider.credential(idToken: idToken),
+    );
+  }
+
+  /// iOS revokes with the authorization code Apple returns, Android with
+  /// the access token. The web cannot revoke at all: there the reader can
+  /// remove the app in their Apple ID settings. A failed revoke is recorded
+  /// and the deletion goes ahead, since the account matters more.
+  Future<void> _reauthenticateWithApple(User user) async {
+    if (kIsWeb) {
+      await user.reauthenticateWithPopup(_appleProvider);
+      return;
+    }
+    final credential = await user.reauthenticateWithProvider(_appleProvider);
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final code = credential.additionalUserInfo?.authorizationCode;
+        if (code != null) await _auth.revokeTokenWithAuthorizationCode(code);
+      } else {
+        final token = credential.credential?.accessToken;
+        if (token != null) await _auth.revokeAccessToken(token);
+      }
+    } catch (e, stack) {
+      CrashReporting.recordError(
+        e,
+        stack,
+        reason: 'Apple access was not revoked',
+      );
+    }
+  }
+
+  String _confirmErrorMessage(FirebaseAuthException e, ConfirmMethod method) {
+    switch (e.code) {
+      case 'wrong-password':
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
+        if (method == ConfirmMethod.password) {
+          return 'That password is not right. Please try again.';
+        }
+        return _failed(e, 'We could not confirm it is you. Please try again.');
+      case 'user-mismatch':
+        return 'That is a different account from the one you are signed in '
+            'with. Please choose the same one.';
+      case 'canceled':
+      case 'user-cancelled':
+      case 'web-context-canceled':
+      case 'popup-closed-by-user':
+      case 'cancelled-popup-request':
+        return 'Sign-in was cancelled, so nothing was deleted.';
+      case 'popup-blocked':
+        return 'Your browser blocked the sign-in popup. Allow popups for this '
+            'site and try again.';
+      case 'too-many-requests':
+        return 'Too many attempts. Wait a moment and try again.';
+      case 'network-request-failed':
+        return 'No network connection. Check your connection and try again.';
+      default:
+        return _failed(e, 'We could not confirm it is you. Please try again.');
     }
   }
 

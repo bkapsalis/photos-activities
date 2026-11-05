@@ -9,6 +9,7 @@ import '../../core/widgets/shared_widgets.dart';
 import '../auth/upgrade_account_screen.dart';
 import '../safety/blocked_people_screen.dart';
 import '../safety/community_rules.dart';
+import 'delete_account_dialog.dart';
 
 const Color _guestAmber = Color(0xFFF9A825);
 
@@ -79,6 +80,15 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () =>
+                          _deleteAccount(context, authService, user),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.heartRed,
+                      ),
+                      child: const Text('Delete account'),
+                    ),
                   ],
                 ),
               ),
@@ -140,6 +150,26 @@ class ProfileScreen extends StatelessWidget {
       // Pop back to the auth gate, which swaps in the sign-in screen.
       navigator.popUntil((route) => route.isFirst);
     }
+  }
+
+  Future<void> _deleteAccount(
+    BuildContext context,
+    AuthService authService,
+    auth.User user,
+  ) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await DeleteAccountDialog.show(context, user)) return;
+
+    // The account is gone on the server; this clears it from the device.
+    await authService.signOut();
+    navigator.popUntil((route) => route.isFirst);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Your account and everything in it have been deleted.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }
 
