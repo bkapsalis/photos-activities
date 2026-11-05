@@ -5,9 +5,12 @@ import '../../core/models/models.dart';
 import '../../core/config/env_config.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/crash_reporting.dart';
+import '../../core/services/moderation_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/widgets/shared_widgets.dart';
+import '../moderation/moderation_screen.dart';
+import '../picture_chat/animal_batch_dialog.dart';
 import '../profile/profile_screen.dart';
 import 'upgrade_account_screen.dart';
 
@@ -89,6 +92,36 @@ class AccountButton extends StatelessWidget {
                   ),
                 ),
               ),
+            // Moderators: reports, bans and the AI content filter.
+            if (isAdmin(user))
+              const PopupMenuItem<String>(
+                value: 'moderation',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.shield_outlined, size: 20),
+                  title: Text('Review reports'),
+                  subtitle: Text(
+                    'Reports, bans and the AI filter',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+            // Moderators: the AI's animal comments, for every photo at once.
+            if (isAdmin(user))
+              const PopupMenuItem<String>(
+                value: 'animals',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.pets, size: 20),
+                  title: Text('Check all photos for animals'),
+                  subtitle: Text(
+                    'Adds AI comments about them',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
             // Dev, and moderators on staging: proves crash reports reach
             // that environment's Crashlytics.
             if (CrashReporting.supported &&
@@ -119,11 +152,19 @@ class AccountButton extends StatelessWidget {
               ),
             ),
           ],
-          child: UserAvatar(
-            initials: profile.initials,
-            color: profile.avatarColor,
-            size: size,
-          ),
+          child: isAdmin(user)
+              ? _ReportsBadge(
+                  child: UserAvatar(
+                    initials: profile.initials,
+                    color: profile.avatarColor,
+                    size: size,
+                  ),
+                )
+              : UserAvatar(
+                  initials: profile.initials,
+                  color: profile.avatarColor,
+                  size: size,
+                ),
         );
       },
     );
@@ -151,6 +192,16 @@ class AccountButton extends StatelessWidget {
           ),
         );
       }
+      return;
+    }
+
+    if (value == 'moderation') {
+      await ModerationScreen.show(context);
+      return;
+    }
+
+    if (value == 'animals') {
+      await AnimalBatchDialog.show(context);
       return;
     }
 
@@ -192,6 +243,37 @@ class AccountButton extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The moderator's avatar, with the number of reported posts waiting for
+/// review: Apple expects reports dealt with within 24 hours.
+class _ReportsBadge extends StatefulWidget {
+  final Widget child;
+
+  const _ReportsBadge({required this.child});
+
+  @override
+  State<_ReportsBadge> createState() => _ReportsBadgeState();
+}
+
+class _ReportsBadgeState extends State<_ReportsBadge> {
+  // Listened to once, not on every rebuild.
+  final _reports = ModerationService().openReports();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<ReportedPost>>(
+      stream: _reports,
+      builder: (context, snapshot) {
+        final waiting = snapshot.data?.length ?? 0;
+        return Badge.count(
+          count: waiting,
+          isLabelVisible: waiting > 0,
+          child: widget.child,
+        );
+      },
     );
   }
 }

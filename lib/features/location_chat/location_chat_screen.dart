@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
+import '../../core/services/safety_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/widgets/live_data.dart';
@@ -32,6 +33,7 @@ Future<bool> _sendMessage(
     context,
     () => FirestoreService().sendChatMessage(locationId, msg),
     failureMessage: 'Your message was not sent. Please try again.',
+    explain: explainBan,
   );
 }
 
@@ -275,8 +277,10 @@ class _ChatMessages extends StatelessWidget {
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           itemCount: messages.length,
-          itemBuilder: (context, index) =>
-              ChatMessageBubble(message: messages[index]),
+          itemBuilder: (context, index) => ChatMessageBubble(
+            message: messages[index],
+            locationId: locationId,
+          ),
         );
       },
     );

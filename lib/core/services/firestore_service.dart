@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
+import '../utils/combine_latest.dart';
 import 'analytics_service.dart';
 import 'crash_reporting.dart';
 import 'performance_service.dart';
+import 'safety_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -29,6 +31,22 @@ class FirestoreService {
     return items;
   }
 
+  /// [items] without what the reader blocked or reported, kept current as
+  /// either changes.
+  static Stream<List<T>> _visible<T>(
+    Stream<List<T>> items,
+    bool Function(SafetyFilter filter, T item) allows,
+  ) => combineLatest(
+    items,
+    SafetyService().filter(),
+    (List<T> list, SafetyFilter filter) =>
+        list.where((item) => allows(filter, item)).toList(),
+  );
+
+  static Stream<List<PhotoPost>> _visiblePhotos(
+    Stream<List<PhotoPost>> photos,
+  ) => _visible(photos, (filter, photo) => filter.allowsPhoto(photo));
+
   // ── Photo Operations ───────────────────────────────────
 
   CollectionReference get _photosRef => _db.collection('photos');
@@ -36,30 +54,34 @@ class FirestoreService {
   /// Stream all photos for a category (case-insensitive), ordered by newest first
   Stream<List<PhotoPost>> streamPhotosByCategory(String category) {
     final target = category.trim().toLowerCase();
-    return _photosRef.snapshots().map((snapshot) {
-      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
-          .where((photo) => photo.category.trim().toLowerCase() == target)
-          .toList();
-      list.sort(
-        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
-          a.createdAt ?? DateTime.now(),
-        ),
-      );
-      return list;
-    });
+    return _visiblePhotos(
+      _photosRef.snapshots().map((snapshot) {
+        final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
+            .where((photo) => photo.category.trim().toLowerCase() == target)
+            .toList();
+        list.sort(
+          (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+            a.createdAt ?? DateTime.now(),
+          ),
+        );
+        return list;
+      }),
+    );
   }
 
   /// Stream all photos (no filter)
   Stream<List<PhotoPost>> streamAllPhotos() {
-    return _photosRef.snapshots().map((snapshot) {
-      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore);
-      list.sort(
-        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
-          a.createdAt ?? DateTime.now(),
-        ),
-      );
-      return list;
-    });
+    return _visiblePhotos(
+      _photosRef.snapshots().map((snapshot) {
+        final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore);
+        list.sort(
+          (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+            a.createdAt ?? DateTime.now(),
+          ),
+        );
+        return list;
+      }),
+    );
   }
 
   /// Stream photos filtered by category AND location name (case-insensitive)
@@ -69,30 +91,38 @@ class FirestoreService {
   ) {
     final targetCat = category.trim().toLowerCase();
     final targetLoc = locationName.trim().toLowerCase();
-    return _photosRef.snapshots().map((snapshot) {
-      final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
-          .where(
-            (photo) =>
-                photo.category.trim().toLowerCase() == targetCat &&
-                photo.location.name.trim().toLowerCase() == targetLoc,
-          )
-          .toList();
-      list.sort(
-        (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
-          a.createdAt ?? DateTime.now(),
-        ),
-      );
-      return list;
-    });
+    return _visiblePhotos(
+      _photosRef.snapshots().map((snapshot) {
+        final list = _parseEach(snapshot.docs, PhotoPost.fromFirestore)
+            .where(
+              (photo) =>
+                  photo.category.trim().toLowerCase() == targetCat &&
+                  photo.location.name.trim().toLowerCase() == targetLoc,
+            )
+            .toList();
+        list.sort(
+          (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+            a.createdAt ?? DateTime.now(),
+          ),
+        );
+        return list;
+      }),
+    );
   }
 
-  /// Stream distinct location names for a category (derived from photos)
+  /// Stream distinct location names for a category (derived from photos),
+  /// leaving out a place whose only photos the reader has hidden.
   Stream<List<String>> streamDistinctLocations(String category) {
     final target = category.trim().toLowerCase();
-    return _photosRef.snapshots().map((snapshot) {
+    return combineLatest(_photosRef.snapshots(), SafetyService().filter(), (
+      QuerySnapshot snapshot,
+      SafetyFilter filter,
+    ) {
       final locations = <String>{};
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
+        final author = data['userId'] as String? ?? '';
+        if (!filter.allows('photos/${doc.id}', author)) continue;
         final cat = (data['category'] as String? ?? '').trim().toLowerCase();
         if (cat == target) {
           final name = (data['locationName'] as String? ?? '').trim();
@@ -181,12 +211,18 @@ class FirestoreService {
 
   /// Stream chat messages for a location
   Stream<List<ChatMessage>> streamChatMessages(String locationId) {
-    return _chatMessagesRef(locationId)
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map(
-          (snapshot) => _parseEach(snapshot.docs, ChatMessage.fromFirestore),
-        );
+    return _visible(
+      _chatMessagesRef(locationId)
+          .orderBy('timestamp', descending: false)
+          .snapshots()
+          .map(
+            (snapshot) => _parseEach(snapshot.docs, ChatMessage.fromFirestore),
+          ),
+      (filter, message) => filter.allows(
+        'chats/$locationId/messages/${message.id}',
+        message.user.id,
+      ),
+    );
   }
 
   /// Send a chat message
@@ -201,10 +237,16 @@ class FirestoreService {
 
   /// Stream comments for a photo
   Stream<List<Comment>> streamComments(String photoId) {
-    return _commentsRef(photoId)
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .map((snapshot) => _parseEach(snapshot.docs, Comment.fromFirestore));
+    return _visible(
+      _commentsRef(photoId)
+          .orderBy('timestamp', descending: false)
+          .snapshots()
+          .map((snapshot) => _parseEach(snapshot.docs, Comment.fromFirestore)),
+      (filter, comment) => filter.allows(
+        'comments/$photoId/messages/${comment.id}',
+        comment.user.id,
+      ),
+    );
   }
 
   /// Adds a comment to a photo and counts it, as one write: either both

@@ -29,6 +29,12 @@ service cloud.firestore {
       return exists(path) && get(path).data.get('uploadsOpen', false) == true;
     }
 
+    // A moderator's ban (bannedUsers/{uid}) stops someone posting anything
+    // new. Call after signedIn().
+    function notBanned() {
+      return !exists(/databases/$(database)/documents/bannedUsers/$(request.auth.uid));
+    }
+
     function ownedByCaller(data) {
       return signedIn() && data.userId == request.auth.uid;
     }
@@ -86,6 +92,7 @@ service cloud.firestore {
     function newPost(counterField) {
       let d = request.resource.data;
       return createdAsSelf()
+        && notBanned()
         && d.keys().hasOnly(['userId', 'userName', 'userInitials',
             'userAvatarColor', 'text', 'timestamp', counterField])
         && d.keys().hasAll(['userId', 'userName', 'userInitials',
@@ -96,12 +103,13 @@ service cloud.firestore {
         && d.get(counterField, 0) == 0;
     }
 
-    // An author may change the text of what they wrote, or, after a guest
-    // registers, the name it is signed with. Never who wrote it or when.
+    // An author may change the text of what they wrote (unless banned), or,
+    // after a guest registers, the name it is signed with. Never who wrote
+    // it or when.
     function authorEdit() {
       let d = request.resource.data;
       return ownedByCaller(resource.data)
-        && ((onlyChanges(['text']) && validText(d.text))
+        && ((onlyChanges(['text']) && validText(d.text) && notBanned())
           || (onlyChanges(['userName', 'userInitials', 'userAvatarColor'])
               && validAuthor(d)));
     }
@@ -120,6 +128,7 @@ service cloud.firestore {
     function newPhoto() {
       let d = request.resource.data;
       return createdAsSelf()
+        && notBanned()
         && d.keys().hasOnly(['imageUrl', 'locationId', 'locationName',
             'locationRegion', 'locationLat', 'locationLng', 'category',
             'userId', 'userName', 'userInitials', 'userAvatarColor',
@@ -228,11 +237,99 @@ service cloud.firestore {
     }
 
     // ── App switches ───────────────────────────────────
-    // config/app holds uploadsOpen. The app reads it to decide whether to
-    // offer uploading; only a moderator may change it.
+    // config/app holds uploadsOpen, which the app reads to decide whether to
+    // offer uploading, and contentFilter, the moderator's switch for the AI
+    // content filter (functions/src/moderation.ts). Only a moderator may
+    // change either.
     match /config/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ── AI checks: photoAnalysis/{photoId} ─────────────
+    // What the AI saw in each photo: the safety verdict, the animals, and
+    // whether those have been posted as comments. Written only by Cloud
+    // Functions (functions/src), which the rules do not govern; read only by
+    // moderators, since a verdict on someone's photo is not for everyone.
+    match /photoAnalysis/{photoId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Reports: reports/{reportId} ────────────────────
+    // Anyone signed in, guests included, may report a photo, comment or
+    // chat message someone else posted, naming its real author: the rules
+    // read the post to check. Only moderators read reports and mark them
+    // dealt with.
+    function newReport() {
+      let d = request.resource.data;
+      return signedIn()
+        && d.keys().hasOnly(['reporterId', 'kind', 'path', 'authorId',
+            'authorName', 'preview', 'imageUrl', 'reason', 'details',
+            'createdAt', 'status'])
+        && d.keys().hasAll(['reporterId', 'kind', 'path', 'authorId',
+            'reason', 'createdAt', 'status'])
+        && d.reporterId == request.auth.uid
+        && d.path is string
+        && ((d.kind == 'photo' && d.path.matches('photos/[^/]+'))
+          || (d.kind == 'comment'
+              && d.path.matches('comments/[^/]+/messages/[^/]+'))
+          || (d.kind == 'chat'
+              && d.path.matches('chats/[^/]+/messages/[^/]+')))
+        && d.reason in ['sexual', 'hate', 'violence', 'harassment', 'spam',
+            'other']
+        && optionalString(d.get('authorName', null), 80)
+        && optionalString(d.get('preview', null), 2000)
+        && optionalString(d.get('imageUrl', null), 2048)
+        && optionalString(d.get('details', null), 500)
+        && d.createdAt == request.time
+        && d.status == 'open'
+        && d.authorId != request.auth.uid
+        && get(path('/databases/' + database + '/documents/' + d.path))
+            .data.userId == d.authorId;
+    }
+
+    match /reports/{reportId} {
+      allow create: if newReport();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Blocks and hidden posts: userSafety/{uid} ──────
+    // Whom you have blocked, and the posts you reported and so no longer
+    // see. The app hides both from you; they are yours alone.
+    match /userSafety/{userId} {
+      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['blocked', 'hidden'])
+        && request.resource.data.get('blocked', {}) is map
+        && request.resource.data.get('blocked', {}).size() <= 500
+        && request.resource.data.get('hidden', []) is list
+        && request.resource.data.get('hidden', []).size() <= 1000;
+    }
+
+    // ── Bans: bannedUsers/{uid} ────────────────────────
+    // A moderator bans and unbans; notBanned() above enforces it. A banned
+    // person may see that they are, so the app can tell them.
+    match /bannedUsers/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow write: if isAdmin();
+    }
+
+    // ── Taken down by the filter: blockedContent/{key} ─
+    // Copies of posts the AI content filter removed, for moderators to put
+    // back or delete for good. Written only by Cloud Functions.
+    match /blockedContent/{key} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Notices: users/{uid}/notices/{noticeId} ────────
+    // Tells someone a post of theirs was taken down, or put back. Written
+    // only by Cloud Functions; the app marks each one seen.
+    match /users/{userId}/notices/{noticeId} {
+      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && request.auth.uid == userId
+        && onlyChanges(['seen']) && request.resource.data.seen == true;
     }
 
     // ── Chat Messages (Location Chat) ──────────────────

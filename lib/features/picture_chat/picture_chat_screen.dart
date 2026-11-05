@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
+import '../../core/services/safety_service.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
@@ -16,6 +17,8 @@ import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
 import '../home/widgets/full_screen_photo_view.dart';
 import '../map/photo_location_screen.dart';
+import '../safety/report_dialog.dart';
+import 'ai_widgets.dart';
 
 class PictureChatScreen extends StatelessWidget {
   final String photoId;
@@ -118,6 +121,7 @@ Future<bool> _addComment(
     context,
     () => FirestoreService().addComment(photoId, comment),
     failureMessage: 'Your comment was not posted. Please try again.',
+    explain: explainBan,
   );
 }
 
@@ -295,6 +299,15 @@ class _MobilePictureChat extends StatelessWidget {
                             ),
                           ),
                         ],
+                      )
+                    else
+                      SafetyMenuButton(
+                        target: ReportTarget.photo(photo),
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                   ],
                 ),
@@ -377,6 +390,16 @@ class _MobilePictureChat extends StatelessWidget {
                         ],
                       ),
                     ),
+
+                    // Moderators only: each look by the AI costs money.
+                    if (isAdmin())
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimalInfoButton(photoId: photo.id),
+                        ),
+                      ),
 
                     // Comments stream
                     Expanded(child: _Comments(photoId: photo.id)),
@@ -640,6 +663,15 @@ class _WebPictureModal extends StatelessWidget {
                                       ),
                                     ),
                                   ],
+                                )
+                              else
+                                SafetyMenuButton(
+                                  target: ReportTarget.photo(photo),
+                                  icon: const Icon(
+                                    Icons.more_vert,
+                                    size: 20,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                             ],
                           ),
@@ -667,16 +699,31 @@ class _WebPictureModal extends StatelessWidget {
                     width: chatWidth,
                     child: Column(
                       children: [
-                        // Close button
-                        Container(
+                        // Close button, beside the moderator's AI button.
+                        Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,
                           ),
-                          alignment: Alignment.centerRight,
-                          child: IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: onClose ?? () => Navigator.pop(context),
+                          child: Row(
+                            children: [
+                              // Moderators only: each look by the AI costs
+                              // money.
+                              if (isAdmin())
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: AnimalInfoButton(photoId: photo.id),
+                                  ),
+                                )
+                              else
+                                const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 20),
+                                onPressed:
+                                    onClose ?? () => Navigator.pop(context),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -788,6 +835,15 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (comment.isAi) {
+      // Only a moderator passes canModify for the AI's comments.
+      return AiCommentTile(
+        comment: comment,
+        onDelete: canModify(comment.user.id)
+            ? () => _confirmAndDelete(context)
+            : null,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -854,6 +910,17 @@ class _CommentTile extends StatelessWidget {
                             ),
                           ),
                         ],
+                      )
+                    // Everyone else may report it, or block its author.
+                    else if (comment.id.isNotEmpty)
+                      SafetyMenuButton(
+                        target: ReportTarget.comment(photoId, comment),
+                        compact: true,
+                        icon: const Icon(
+                          Icons.more_horiz,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                   ],
                 ),

@@ -30,6 +30,10 @@ class AppColors {
   static const Color heartRed = Color(0xFFE53935);
   static const Color heartPink = Color(0xFFFF5252);
 
+  // AI comments: badge and avatar. The same teal as AI_AUTHOR in
+  // functions/src/config.ts, and given to no person's avatar.
+  static const Color ai = Color(0xFF00897B);
+
   // Avatar palette
   static const List<Color> avatarColors = [
     Color(0xFFE53935), // Red

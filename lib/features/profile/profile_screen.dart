@@ -7,6 +7,8 @@ import '../../core/services/contribution_stats_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/shared_widgets.dart';
 import '../auth/upgrade_account_screen.dart';
+import '../safety/blocked_people_screen.dart';
+import '../safety/community_rules.dart';
 
 const Color _guestAmber = Color(0xFFF9A825);
 
@@ -16,9 +18,9 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   static Future<void> show(BuildContext context) {
-    return Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
   @override
@@ -58,9 +60,14 @@ class ProfileScreen extends StatelessWidget {
                     else
                       _RegisteredSection(user: user),
                     const SizedBox(height: 24),
+                    const _SafetySection(),
+                    const SizedBox(height: 24),
                     OutlinedButton.icon(
-                      onPressed: () => _signOut(context, authService,
-                          isGuest: profile.isGuest),
+                      onPressed: () => _signOut(
+                        context,
+                        authService,
+                        isGuest: profile.isGuest,
+                      ),
                       icon: const Icon(Icons.logout, size: 18),
                       label: const Text('Sign out'),
                       style: OutlinedButton.styleFrom(
@@ -109,7 +116,7 @@ class ProfileScreen extends StatelessWidget {
         content: Text(
           isGuest
               ? 'This guest session cannot be recovered once you sign out, and '
-                  'your chat history will stay behind. Register first to keep it.'
+                    'your chat history will stay behind. Register first to keep it.'
               : 'You can sign back in at any time.',
         ),
         actions: [
@@ -258,7 +265,8 @@ class _GuestSection extends StatelessWidget {
         const _Benefit(
           icon: Icons.forum_outlined,
           title: 'Your chat history, kept',
-          detail: 'Everything you have already posted stays yours — you are '
+          detail:
+              'Everything you have already posted stays yours — you are '
               'upgraded in place, not moved to a new account.',
         ),
         const _Benefit(
@@ -359,12 +367,56 @@ class _RegisteredSection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (user.email != null)
-          _DetailRow(icon: Icons.email_outlined, label: 'Email', value: user.email!),
+          _DetailRow(
+            icon: Icons.email_outlined,
+            label: 'Email',
+            value: user.email!,
+          ),
         _DetailRow(
           icon: Icons.key_outlined,
           label: methods.length == 1 ? 'Sign-in method' : 'Sign-in methods',
           value: methods.isEmpty ? 'Not available' : methods.join(', '),
         ),
+      ],
+    );
+  }
+}
+
+/// Who you have blocked, the rules everyone agreed to, and how to reach the
+/// moderator.
+class _SafetySection extends StatelessWidget {
+  const _SafetySection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'SAFETY',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.block, size: 20),
+          title: const Text('Blocked people'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => BlockedPeopleScreen.show(context),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.rule, size: 20),
+          title: const Text('Community rules'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => CommunityRulesScreen.show(context),
+        ),
+        const Align(alignment: Alignment.centerLeft, child: ContactLink()),
       ],
     );
   }
@@ -541,8 +593,7 @@ class _ContributionsState extends State<_Contributions> {
         FutureBuilder<ContributionStats>(
           future: _stats,
           builder: (context, snapshot) {
-            final loading =
-                snapshot.connectionState == ConnectionState.waiting;
+            final loading = snapshot.connectionState == ConnectionState.waiting;
             final stats = snapshot.data ?? const ContributionStats();
 
             return Column(
