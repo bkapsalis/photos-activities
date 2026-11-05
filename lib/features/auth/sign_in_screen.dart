@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../safety/community_rules.dart';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback onSignedIn;
@@ -309,7 +310,10 @@ class _SignInScreenState extends State<SignInScreen>
                       onPressed: _isLoading ? null : _resetPassword,
                       child: const Text(
                         'Forgot Password? Tap to reset',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -392,6 +396,8 @@ class _SignInScreenState extends State<SignInScreen>
                     color: AppColors.textSecondary,
                   ),
                 ),
+                const SizedBox(height: 20),
+                const RulesAgreementNote(),
               ],
             ),
           ),

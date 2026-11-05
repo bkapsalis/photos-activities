@@ -268,6 +268,101 @@ await check('a chat message as the app writes it is accepted', () => assertSucce
 await check('a chat message cannot carry the old isMe flag', () => assertFails(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), post('alice', { isMe: true }))));
 await check('a chat message cannot be signed with another name', () => assertFails(addDoc(collection(alice().firestore(), 'chats/loc1/messages'), post('alice', { userName: 'bob' }))));
 
+console.log('Firestore — reports');
+// A report as SafetyService.report writes it: here, Alice reporting Bob's
+// comment on her photo.
+const report = (reporter, extra = {}) => ({
+  reporterId: reporter, kind: 'comment', path: 'comments/p1/messages/c-bob', authorId: 'bob',
+  authorName: 'bob', preview: 'hi', reason: 'harassment', createdAt: serverTimestamp(), status: 'open', ...extra,
+});
+const sendReport = (ctx, data) => addDoc(collection(ctx.firestore(), 'reports'), data);
+await reset();
+await check('anyone signed in can report someone else\'s comment', () => assertSucceeds(sendReport(alice(), report('alice'))));
+await check('a guest can report a photo', () => assertSucceeds(sendReport(guest(), report('g7xQ2', {
+  kind: 'photo', path: 'photos/p1', authorId: 'alice', imageUrl: 'https://example.com/x.jpg', preview: null,
+}))));
+await check('a chat message can be reported', () => assertSucceeds(sendReport(alice(), report('alice', {
+  kind: 'chat', path: 'chats/loc1/messages/m-bob', details: 'Keeps insulting people',
+}))));
+await check('signed out, nobody can report', () => assertFails(sendReport(anon(), report('alice'))));
+await check('a report is sent as yourself', () => assertFails(sendReport(alice(), report('bob'))));
+await check('a report must name the post\'s real author', () => assertFails(sendReport(alice(), report('alice', { authorId: 'carol' }))));
+await check('nobody can report their own post', () => assertFails(sendReport(bob(), report('bob'))));
+await check('a post that does not exist cannot be reported', () =>
+  assertFails(sendReport(alice(), report('alice', { path: 'comments/p1/messages/nope' }))));
+await check('the kind of post must match where it is', () => assertFails(sendReport(alice(), report('alice', { kind: 'photo' }))));
+await check('a report needs one of the app\'s reasons', () => assertFails(sendReport(alice(), report('alice', { reason: 'boring' }))));
+await check('a report starts open, at the server\'s time', async () => {
+  await assertFails(sendReport(alice(), report('alice', { status: 'dismissed' })));
+  await assertFails(sendReport(alice(), report('alice', { createdAt: new Date('2030-01-01') })));
+});
+await check('a report cannot add fields the app does not write', () => assertFails(sendReport(alice(), report('alice', { priority: 'high' }))));
+await check('only a moderator reads and settles reports', async () => {
+  await seed((db) => setDoc(doc(db, 'reports/r1'), { reporterId: 'alice', status: 'open' }));
+  await assertFails(getDoc(doc(alice().firestore(), 'reports/r1')));
+  await assertFails(updateDoc(doc(alice().firestore(), 'reports/r1'), { status: 'dismissed' }));
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'reports/r1')));
+  await assertSucceeds(updateDoc(doc(admin().firestore(), 'reports/r1'), { status: 'dismissed' }));
+});
+
+console.log('Firestore — blocks and bans');
+await reset();
+await check('you can keep your own blocks and hidden posts', () => assertSucceeds(setDoc(doc(alice().firestore(), 'userSafety/alice'), {
+  blocked: { bob: { name: 'bob' } }, hidden: ['comments/p1/messages/c-bob'],
+})));
+await check('nobody else can read or change them', async () => {
+  await assertFails(getDoc(doc(bob().firestore(), 'userSafety/alice')));
+  await assertFails(setDoc(doc(bob().firestore(), 'userSafety/alice'), { blocked: {} }));
+});
+await check('they hold only blocks and hidden posts', () => assertFails(setDoc(doc(alice().firestore(), 'userSafety/alice'), { admin: true })));
+await check('only a moderator can ban', async () => {
+  await assertFails(setDoc(doc(alice().firestore(), 'bannedUsers/bob'), { name: 'bob' }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'bannedUsers/bob'), { name: 'bob' }));
+});
+await check('a banned person can see their ban; others cannot', async () => {
+  await assertSucceeds(getDoc(doc(bob().firestore(), 'bannedUsers/bob')));
+  await assertFails(getDoc(doc(alice().firestore(), 'bannedUsers/bob')));
+});
+await check('a banned person cannot comment, chat or edit', async () => {
+  await assertFails(commentBatch(bob(), 'p1', post('bob')));
+  await assertFails(addDoc(collection(bob().firestore(), 'chats/loc1/messages'), post('bob', { reactionCount: 0 })));
+  await assertFails(updateDoc(doc(bob().firestore(), 'comments/p1/messages/c-bob'), { text: 'edited' }));
+});
+await check('a banned person cannot upload, even with uploads open', async () => {
+  await openUploads();
+  await assertFails(addDoc(collection(bob().firestore(), 'photos'), photo('bob')));
+});
+await check('everyone else still can post', () => assertSucceeds(commentBatch(alice(), 'p1', post('alice'))));
+await check('after a moderator unbans, they can post again', async () => {
+  await assertSucceeds(deleteDoc(doc(admin().firestore(), 'bannedUsers/bob')));
+  await assertSucceeds(commentBatch(bob(), 'p1', post('bob')));
+});
+
+console.log('Firestore — the content filter');
+await reset();
+await check('only a moderator switches the filter', async () => {
+  await assertFails(setDoc(doc(alice().firestore(), 'config/app'), { contentFilter: true }));
+  await assertSucceeds(setDoc(doc(admin().firestore(), 'config/app'), { contentFilter: true }));
+});
+await check('only a moderator reads what the filter took down', async () => {
+  await seed((db) => setDoc(doc(db, 'blockedContent/photos_p9'), { kind: 'photo', status: 'removed' }));
+  await assertFails(getDoc(doc(alice().firestore(), 'blockedContent/photos_p9')));
+  await assertSucceeds(getDoc(doc(admin().firestore(), 'blockedContent/photos_p9')));
+});
+await check('nobody writes it, the moderator included', () =>
+  assertFails(setDoc(doc(admin().firestore(), 'blockedContent/photos_p9'), { status: 'restored' })));
+await check('your notices are yours to read and mark seen', async () => {
+  await seed((db) => setDoc(doc(db, 'users/bob/notices/n1'), { kind: 'comment', seen: false }));
+  await assertSucceeds(getDoc(doc(bob().firestore(), 'users/bob/notices/n1')));
+  await assertFails(getDoc(doc(alice().firestore(), 'users/bob/notices/n1')));
+  await assertSucceeds(updateDoc(doc(bob().firestore(), 'users/bob/notices/n1'), { seen: true }));
+});
+await check('a notice cannot be written or reworded by anyone', async () => {
+  await assertFails(updateDoc(doc(bob().firestore(), 'users/bob/notices/n1'), { kind: 'photo' }));
+  await assertFails(setDoc(doc(bob().firestore(), 'users/bob/notices/n2'), { kind: 'photo', seen: false }));
+  await assertFails(setDoc(doc(admin().firestore(), 'users/bob/notices/n2'), { kind: 'photo', seen: false }));
+});
+
 console.log('Storage');
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 const meta = (uid) => ({ contentType: 'image/jpeg', customMetadata: uid ? { ownerUid: uid } : {} });

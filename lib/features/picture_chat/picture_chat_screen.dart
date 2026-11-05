@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
+import '../../core/services/safety_service.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/theme/app_colors.dart';
@@ -16,6 +17,7 @@ import '../chat/widgets/chat_widgets.dart';
 import '../home/widgets/edit_photo_dialog.dart';
 import '../home/widgets/full_screen_photo_view.dart';
 import '../map/photo_location_screen.dart';
+import '../safety/report_dialog.dart';
 import 'ai_widgets.dart';
 
 class PictureChatScreen extends StatelessWidget {
@@ -119,6 +121,7 @@ Future<bool> _addComment(
     context,
     () => FirestoreService().addComment(photoId, comment),
     failureMessage: 'Your comment was not posted. Please try again.',
+    explain: explainBan,
   );
 }
 
@@ -296,6 +299,15 @@ class _MobilePictureChat extends StatelessWidget {
                             ),
                           ),
                         ],
+                      )
+                    else
+                      SafetyMenuButton(
+                        target: ReportTarget.photo(photo),
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                   ],
                 ),
@@ -651,6 +663,15 @@ class _WebPictureModal extends StatelessWidget {
                                       ),
                                     ),
                                   ],
+                                )
+                              else
+                                SafetyMenuButton(
+                                  target: ReportTarget.photo(photo),
+                                  icon: const Icon(
+                                    Icons.more_vert,
+                                    size: 20,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                             ],
                           ),
@@ -889,6 +910,17 @@ class _CommentTile extends StatelessWidget {
                             ),
                           ),
                         ],
+                      )
+                    // Everyone else may report it, or block its author.
+                    else if (comment.id.isNotEmpty)
+                      SafetyMenuButton(
+                        target: ReportTarget.comment(photoId, comment),
+                        compact: true,
+                        icon: const Icon(
+                          Icons.more_horiz,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                   ],
                 ),

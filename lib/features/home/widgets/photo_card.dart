@@ -2,11 +2,30 @@ import '../../../core/widgets/like_button.dart';
 import 'package:flutter/material.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/photo_deletion_service.dart';
+import '../../../core/services/safety_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/permissions.dart';
 import '../../../core/widgets/app_network_image.dart';
 import '../../../core/widgets/shared_widgets.dart';
+import '../../safety/report_dialog.dart';
 import 'edit_photo_dialog.dart';
+
+/// The round ⋮ on a photo card, readable over any photo.
+class _MenuDot extends StatelessWidget {
+  const _MenuDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: const BoxDecoration(
+        color: Colors.black45,
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.more_vert, color: Colors.white, size: 16),
+    );
+  }
+}
 
 class PhotoCard extends StatelessWidget {
   final PhotoPost photo;
@@ -39,24 +58,14 @@ class PhotoCard extends StatelessWidget {
             ),
 
             // Edit / Delete Menu (top-right), for the owner or a moderator
-            // only; firestore.rules refuse anyone else.
+            // only; firestore.rules refuse anyone else. Everyone else gets
+            // Report and Block there instead.
             if (canModify(photo.user.id))
               Positioned(
                 top: 6,
                 right: 6,
                 child: PopupMenuButton<String>(
-                  icon: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.black45,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.more_vert,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
+                  icon: const _MenuDot(),
                   onSelected: (value) async {
                     if (value == 'edit') {
                       EditPhotoDialog.show(context, photo);
@@ -133,6 +142,15 @@ class PhotoCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              )
+            else
+              Positioned(
+                top: 6,
+                right: 6,
+                child: SafetyMenuButton(
+                  target: ReportTarget.photo(photo),
+                  icon: const _MenuDot(),
                 ),
               ),
 

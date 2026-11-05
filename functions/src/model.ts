@@ -1,11 +1,20 @@
-import { FinishReason, GoogleGenAI, ThinkingLevel } from "@google/genai";
+import {
+  FinishReason,
+  GenerateContentResponse,
+  GoogleGenAI,
+  ThinkingLevel,
+} from "@google/genai";
 
 import {
   buildPrompt,
+  buildTextPrompt,
   parseAnalysis,
+  parseTextVerdict,
   PhotoAnalysis,
   PhotoContext,
   RESPONSE_SCHEMA,
+  TEXT_RESPONSE_SCHEMA,
+  TextVerdict,
 } from "./analysis";
 import { MODEL, VERTEX_LOCATION } from "./config";
 
@@ -33,8 +42,17 @@ export type Analyzer = (
   context: PhotoContext,
 ) => Promise<ModelResult>;
 
+export interface TextCheckResult {
+  verdict: TextVerdict;
+  model: string;
+  usage: Usage;
+}
+
+/** Checks one comment or chat message; a parameter, like [Analyzer]. */
+export type TextChecker = (text: string) => Promise<TextCheckResult>;
+
 // Answers Vertex AI gives instead of a description when its own filters stop
-// an image. Such an image is treated as flagged rather than as an error.
+// an image or a text. Either is treated as flagged rather than as an error.
 const REFUSALS = new Set<string>([
   FinishReason.SAFETY,
   FinishReason.PROHIBITED_CONTENT,
@@ -83,17 +101,8 @@ export const analyzeWithGemini: Analyzer = async (image, context) => {
     },
   });
 
-  const usage: Usage = {
-    inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-    outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
-    thinkingTokens: response.usageMetadata?.thoughtsTokenCount ?? 0,
-  };
-
-  const refusal =
-    response.promptFeedback?.blockReason ??
-    [response.candidates?.[0]?.finishReason].find(
-      (reason) => reason && REFUSALS.has(reason),
-    );
+  const usage = usageOf(response);
+  const refusal = refusalOf(response);
   if (refusal) {
     return {
       analysis: {
@@ -113,3 +122,53 @@ export const analyzeWithGemini: Analyzer = async (image, context) => {
 
   return { analysis: parseAnalysis(response.text), model: MODEL, usage };
 };
+
+/** [MODEL] on Vertex AI, checking one comment or chat message. */
+export const checkTextWithGemini: TextChecker = async (text) => {
+  const response = await genai().models.generateContent({
+    model: MODEL,
+    contents: [{ role: "user", parts: [{ text: buildTextPrompt(text) }] }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: TEXT_RESPONSE_SCHEMA,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+    },
+  });
+
+  const usage = usageOf(response);
+  const refusal = refusalOf(response);
+  if (refusal) {
+    return {
+      verdict: {
+        sexual: false,
+        hate: false,
+        violence: false,
+        harassment: false,
+        refused: true,
+        reason: `The model would not read it (${refusal}).`,
+      },
+      model: MODEL,
+      usage,
+    };
+  }
+
+  return { verdict: parseTextVerdict(response.text), model: MODEL, usage };
+};
+
+function usageOf(response: GenerateContentResponse): Usage {
+  return {
+    inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+    thinkingTokens: response.usageMetadata?.thoughtsTokenCount ?? 0,
+  };
+}
+
+/** Why Vertex AI's own filters stopped the request, if they did. */
+function refusalOf(response: GenerateContentResponse): string | undefined {
+  return (
+    response.promptFeedback?.blockReason ??
+    [response.candidates?.[0]?.finishReason].find(
+      (reason) => reason && REFUSALS.has(reason),
+    )
+  );
+}

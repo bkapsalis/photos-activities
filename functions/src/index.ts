@@ -5,18 +5,36 @@
  * it is safe to show and which animals are in it. Moderators then post the
  * animals as "AI Naturalist" comments, one photo at a time
  * (describeAnimals) or for every photo (describeAnimalsBatch).
+ *
+ * With the content filter on, a flagged photo is taken down, and so is a
+ * flagged comment or chat message (checkComment, checkChatMessage).
+ * Moderators review what was taken down, and put it back or delete it for
+ * good (restoreRemovedPost, discardRemovedPost).
  */
 import { initializeApp } from "firebase-admin/app";
 import * as logger from "firebase-functions/logger";
 import { setGlobalOptions } from "firebase-functions/v2";
 import {
+  Change,
+  DocumentSnapshot,
+  FirestoreEvent,
   onDocumentCreated,
   onDocumentDeleted,
+  onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { ADMIN_EMAILS, REGION } from "./config";
-import { analyzeWithGemini } from "./model";
+import { analyzeWithGemini, checkTextWithGemini } from "./model";
+import {
+  checkPost,
+  discardPost,
+  ModerationProblem,
+  removedKey,
+  removedRef,
+  removeFlaggedPhoto,
+  restorePost,
+} from "./moderation";
 import {
   analysisRef,
   analyzePhoto,
@@ -44,9 +62,13 @@ export const onPhotoCreated = onDocumentCreated(
     if ((await analysisRef(photoId).get()).exists) return;
     try {
       const analysis = await analyzePhoto(photoId, photo, analyzeWithGemini);
+      const removed =
+        analysis.flagged === true &&
+        (await removeFlaggedPhoto(photoId, analysis.safety!));
       logger.info("Checked new photo", {
         photoId,
         flagged: analysis.flagged,
+        removed,
         animals: analysis.animals?.map((animal) => animal.commonName),
         usage: analysis.usage,
       });
@@ -57,13 +79,90 @@ export const onPhotoCreated = onDocumentCreated(
   },
 );
 
-/** Clears a deleted photo's analysis, which nothing else would remove. */
+/**
+ * Clears a deleted photo's analysis, which nothing else would remove,
+ * unless the filter took the photo down: the moderator reviewing it reads
+ * the analysis, and it keeps a restored photo from being checked again.
+ */
 export const onPhotoDeleted = onDocumentDeleted(
   { document: "photos/{photoId}", region: REGION },
   async (event) => {
-    await analysisRef(event.params.photoId).delete();
+    const photoId = event.params.photoId;
+    const removed = await removedRef(removedKey(`photos/${photoId}`)).get();
+    if (removed.get("status") === "removed") return;
+    await analysisRef(photoId).delete();
   },
 );
+
+type WriteEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined>;
+
+/**
+ * Runs the filter over a written comment or chat message. A failure leaves
+ * the post up: a filter that cannot reach the AI must not silence everyone.
+ */
+async function checkWrittenPost(
+  kind: "comment" | "chat",
+  event: WriteEvent,
+): Promise<void> {
+  const change = event.data;
+  if (!change) return;
+  const path = change.after.ref.path;
+  try {
+    const outcome = await checkPost(
+      kind,
+      change.after.ref,
+      change.before.data(),
+      change.after.data(),
+      checkTextWithGemini,
+    );
+    if (outcome === "removed") logger.info("Took down a post", { path });
+  } catch (error) {
+    logger.error("Could not check a post", { path, error });
+  }
+}
+
+export const checkComment = onDocumentWritten(
+  { document: "comments/{photoId}/messages/{commentId}", region: REGION },
+  (event) => checkWrittenPost("comment", event),
+);
+
+export const checkChatMessage = onDocumentWritten(
+  { document: "chats/{locationId}/messages/{messageId}", region: REGION },
+  (event) => checkWrittenPost("chat", event),
+);
+
+/** A moderator's "Put back" on a post the filter took down. */
+export const restoreRemovedPost = onCall(async (request) => {
+  requireModerator(request);
+  const key = removedPostKey(request);
+  try {
+    await restorePost(key);
+  } catch (error) {
+    throw asHttpsError(error, key);
+  }
+  return { ok: true };
+});
+
+/** A moderator's "Delete for good" on a post the filter took down. */
+export const discardRemovedPost = onCall(async (request) => {
+  requireModerator(request);
+  const key = removedPostKey(request);
+  try {
+    await discardPost(key);
+  } catch (error) {
+    throw asHttpsError(error, key);
+  }
+  return { ok: true };
+});
+
+function removedPostKey(request: CallableRequest): string {
+  const key = request.data?.key;
+  // A blockedContent id: a path with its slashes made underscores.
+  if (typeof key !== "string" || !/^[A-Za-z0-9_-]{1,700}$/.test(key)) {
+    throw new HttpsError("invalid-argument", "Which post?");
+  }
+  return key;
+}
 
 /** A moderator's "More info about the animals" on one photo. */
 export const describeAnimals = onCall(
@@ -77,7 +176,11 @@ export const describeAnimals = onCall(
     try {
       return await postAnimalComments(photoId, analyzeWithGemini);
     } catch (error) {
-      throw asHttpsError(error, photoId);
+      throw asHttpsError(
+        error,
+        photoId,
+        "The AI could not look at this photo just now. Please try again.",
+      );
     }
   },
 );
@@ -110,17 +213,22 @@ function requireModerator(request: CallableRequest): void {
   }
 }
 
-function asHttpsError(error: unknown, photoId: string): HttpsError {
+/**
+ * What the app is told when a moderator's request fails: the problems the
+ * code expects in their own words, anything else as [fallback].
+ */
+function asHttpsError(
+  error: unknown,
+  id: string,
+  fallback = "That could not be done just now. Please try again.",
+): HttpsError {
   if (error instanceof HttpsError) return error;
-  if (error instanceof PhotoProblem) {
+  if (error instanceof PhotoProblem || error instanceof ModerationProblem) {
     return new HttpsError(
       error.kind === "notFound" ? "not-found" : "failed-precondition",
       error.message,
     );
   }
-  logger.error("Could not describe animals", { photoId, error });
-  return new HttpsError(
-    "unavailable",
-    "The AI could not look at this photo just now. Please try again.",
-  );
+  logger.error("Could not carry out a moderator's request", { id, error });
+  return new HttpsError("unavailable", fallback);
 }

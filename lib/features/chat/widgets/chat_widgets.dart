@@ -2,8 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/safety_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
+import '../../safety/report_dialog.dart';
 
 /// The longest comment or chat message the rules accept (validText in
 /// firestore.rules). Typing stops there rather than having the send refused.
@@ -15,7 +17,16 @@ class ChatMessageBubble extends StatelessWidget {
   /// Who is reading; the signed-in user unless a test supplies one.
   final String? viewerId;
 
-  const ChatMessageBubble({super.key, required this.message, this.viewerId});
+  /// The chat it is in. Given, someone else's message offers Report and
+  /// Block.
+  final String? locationId;
+
+  const ChatMessageBubble({
+    super.key,
+    required this.message,
+    this.viewerId,
+    this.locationId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -34,13 +45,32 @@ class ChatMessageBubble extends StatelessWidget {
           if (!isMe)
             Padding(
               padding: const EdgeInsets.only(left: 44, bottom: 4),
-              child: Text(
-                message.user.name,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      message.user.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (locationId != null && message.id.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    SafetyMenuButton(
+                      target: ReportTarget.chat(locationId!, message),
+                      compact: true,
+                      icon: const Icon(
+                        Icons.more_horiz,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           Row(

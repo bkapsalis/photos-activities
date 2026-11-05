@@ -7,6 +7,7 @@ import 'features/home/home_screen.dart';
 import 'features/location_chat/location_chat_screen.dart';
 import 'features/picture_chat/picture_chat_screen.dart';
 import 'features/auth/sign_in_screen.dart';
+import 'features/safety/notice_listener.dart';
 
 class BillsBayAreaApp extends StatelessWidget {
   const BillsBayAreaApp({super.key});
@@ -91,9 +92,12 @@ class _AppShellState extends State<_AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return HomeScreen(
-      onPhotoTap: _openPictureChat,
-      onChatTap: _openLocationChat,
+    // Tells the reader when the content filter takes down a post of theirs.
+    return NoticeListener(
+      child: HomeScreen(
+        onPhotoTap: _openPictureChat,
+        onChatTap: _openLocationChat,
+      ),
     );
   }
 }
