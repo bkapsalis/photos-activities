@@ -4,14 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('offersTestCrash', () {
-    test('dev offers it to everyone', () {
-      expect(
-        CrashReporting.offersTestCrash(Environment.dev, admin: false),
-        isTrue,
-      );
+    test('dev offers it to moderators only', () {
       expect(
         CrashReporting.offersTestCrash(Environment.dev, admin: true),
         isTrue,
+      );
+      expect(
+        CrashReporting.offersTestCrash(Environment.dev, admin: false),
+        isFalse,
       );
     });
 
