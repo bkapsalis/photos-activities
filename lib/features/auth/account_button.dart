@@ -9,6 +9,7 @@ import '../../core/services/moderation_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/permissions.dart';
 import '../../core/widgets/shared_widgets.dart';
+import '../moderation/delete_account_of_dialog.dart';
 import '../moderation/moderation_screen.dart';
 import '../picture_chat/animal_batch_dialog.dart';
 import '../profile/profile_screen.dart';
@@ -122,6 +123,22 @@ class AccountButton extends StatelessWidget {
                   ),
                 ),
               ),
+            // Moderators: for someone who emails to ask, as the website's
+            // account-deletion page offers.
+            if (isAdmin(user))
+              const PopupMenuItem<String>(
+                value: 'deleteaccount',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.person_remove_outlined, size: 20),
+                  title: Text('Delete an account'),
+                  subtitle: Text(
+                    'When someone asks by email',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
             // Moderators, on dev and staging: proves crash reports reach
             // that environment's Crashlytics.
             if (CrashReporting.supported &&
@@ -202,6 +219,11 @@ class AccountButton extends StatelessWidget {
 
     if (value == 'animals') {
       await AnimalBatchDialog.show(context);
+      return;
+    }
+
+    if (value == 'deleteaccount') {
+      await DeleteAccountOfDialog.show(context);
       return;
     }
 

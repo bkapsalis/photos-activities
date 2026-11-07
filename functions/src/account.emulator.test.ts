@@ -13,7 +13,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
-import { deleteAccount } from "./account";
+import { deleteAccount, findAccount } from "./account";
 
 const emulated =
   !!process.env.FIRESTORE_EMULATOR_HOST &&
@@ -41,7 +41,12 @@ describe("deleting an account", { skip: !emulated }, () => {
    * each other.
    */
   async function seed(): Promise<void> {
-    await auth().createUser({ uid: "u1" });
+    await auth().createUser({
+      uid: "u1",
+      email: "pat@example.com",
+      password: "emulator-only",
+      displayName: "Pat",
+    });
     await auth().createUser({ uid: "u2" });
     await image().save(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), {
       contentType: "image/jpeg",
@@ -203,5 +208,26 @@ describe("deleting an account", { skip: !emulated }, () => {
       chatMessages: 0,
       likes: 0,
     });
+  });
+
+  it("finds an account by its email, with what is in it", async () => {
+    await seed();
+
+    const pat = await findAccount("pat@example.com");
+
+    assert.equal(pat?.uid, "u1");
+    assert.equal(pat?.name, "Pat");
+    assert.deepEqual(pat?.signInWith, ["password"]);
+    assert.ok(pat?.createdAt);
+    // A photo; a comment and a chat message; two likes, one of them left
+    // on a photo deleted long ago.
+    assert.equal(pat?.photos, 1);
+    assert.equal(pat?.messages, 2);
+    assert.equal(pat?.likes, 2);
+  });
+
+  it("finds nothing for an address no account uses", async () => {
+    await seed();
+    assert.equal(await findAccount("nobody@example.com"), null);
   });
 });

@@ -384,7 +384,7 @@ class _WebTopNav extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: Semantics(
                 button: true,
-                label: "Bill's Bay Area, return to home",
+                label: "Bill's Bay Area Fun Activities, return to home",
                 child: Padding(
                   padding: const EdgeInsets.all(4),
                   child: Row(

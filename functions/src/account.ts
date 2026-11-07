@@ -1,8 +1,9 @@
-import { DecodedIdToken, getAuth } from "firebase-admin/auth";
+import { DecodedIdToken, getAuth, UserRecord } from "firebase-admin/auth";
 import {
   DocumentReference,
   FieldValue,
   getFirestore,
+  Query,
   QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
@@ -15,8 +16,11 @@ import { analysisRef, storageLocation } from "./photos";
  * Deleting an account, which App Store guideline 5.1.1(v) and Google Play
  * require of an app people sign up to: everything the person put in, then
  * the account itself. The app's "Delete account" in Profile calls it
- * through deleteMyAccount.
+ * through deleteMyAccount; a moderator deleting an account its owner asked
+ * by email to have deleted, through findAccountByEmail and deleteAccountOf.
  */
+
+const db = () => getFirestore();
 
 /** What deleting an account removed, for the log. */
 export interface DeletedAccount {
@@ -53,7 +57,73 @@ export function deletionRefusal(
   return null;
 }
 
-const db = () => getFirestore();
+/**
+ * Why a moderator may not delete [user]'s account for them, or null if
+ * they may: as in the app, a moderator's account would take every photo
+ * with it.
+ */
+export function moderatorDeletionRefusal(
+  user: Pick<UserRecord, "email" | "emailVerified">,
+): string | null {
+  return isModerator({ email: user.email, email_verified: user.emailVerified })
+    ? "That is a moderator's account: deleting it would delete every photo " +
+        "it posted. Take it off the moderator list first."
+    : null;
+}
+
+/**
+ * Whose an account is and what is in it, for the moderator to check
+ * before deleting it at its owner's request.
+ */
+export interface AccountSummary {
+  uid: string;
+  name: string | null;
+  email: string | null;
+  /** How they sign in, such as "google.com", "apple.com" or "password". */
+  signInWith: string[];
+  createdAt: string | null;
+  lastSignInAt: string | null;
+  photos: number;
+  /** Comments and chat messages. */
+  messages: number;
+  likes: number;
+}
+
+/**
+ * The account signed up with [email], for a moderator deleting it when its
+ * owner asks by email, or null if no account uses that address.
+ */
+export async function findAccount(
+  email: string,
+): Promise<AccountSummary | null> {
+  let user: UserRecord;
+  try {
+    user = await getAuth().getUserByEmail(email);
+  } catch (error) {
+    if ((error as { code?: string }).code === "auth/user-not-found") {
+      return null;
+    }
+    throw error;
+  }
+  const uid = user.uid;
+  const count = async (query: Query) =>
+    (await query.count().get()).data().count;
+  const isoDate = (utc: string | undefined) =>
+    utc ? new Date(utc).toISOString() : null;
+  return {
+    uid,
+    name: user.displayName ?? null,
+    email: user.email ?? null,
+    signInWith: user.providerData.map((provider) => provider.providerId),
+    createdAt: isoDate(user.metadata.creationTime),
+    lastSignInAt: isoDate(user.metadata.lastSignInTime),
+    photos: await count(db().collection("photos").where("userId", "==", uid)),
+    messages: await count(
+      db().collectionGroup("messages").where("userId", "==", uid),
+    ),
+    likes: await count(db().collectionGroup("likes").where("userId", "==", uid)),
+  };
+}
 
 // A batch holds at most 500 writes: each chunk's deletes plus a count
 // update for every photo they touch.

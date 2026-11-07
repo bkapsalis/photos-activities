@@ -12,9 +12,14 @@
  * good (restoreRemovedPost, discardRemovedPost).
  *
  * Anyone may delete their own account and everything in it
- * (deleteMyAccount).
+ * (deleteMyAccount). A moderator may delete someone's account for them, when
+ * they ask by email (findAccountByEmail, deleteAccountOf).
+ *
+ * Every night, reports closed more than a year ago are deleted
+ * (deleteOldReports).
  */
 import { initializeApp } from "firebase-admin/app";
+import { getAuth, UserRecord } from "firebase-admin/auth";
 import * as logger from "firebase-functions/logger";
 import { setGlobalOptions } from "firebase-functions/v2";
 import {
@@ -26,8 +31,14 @@ import {
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
-import { deleteAccount, deletionRefusal } from "./account";
+import {
+  deleteAccount,
+  deletionRefusal,
+  findAccount,
+  moderatorDeletionRefusal,
+} from "./account";
 import { isModerator, REGION } from "./config";
 import { analyzeWithGemini, checkTextWithGemini } from "./model";
 import {
@@ -46,6 +57,7 @@ import {
   postAnimalComments,
   postAnimalCommentsBatch,
 } from "./photos";
+import { deleteReportsClosedBefore, retentionCutoff } from "./reports";
 
 initializeApp();
 
@@ -233,7 +245,89 @@ export const deleteMyAccount = onCall(
 );
 
 /**
- * Only moderators may spend money on the model. Matched as firestore.rules
+ * A moderator's "Delete an account", first step: whose account an email
+ * address belongs to and what is in it, so they can check before deleting.
+ */
+export const findAccountByEmail = onCall(async (request) => {
+  requireModerator(request);
+  const email = String(request.data?.email ?? "").trim();
+  if (email.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(email)) {
+    throw new HttpsError("invalid-argument", "That is not an email address.");
+  }
+  let account;
+  try {
+    account = await findAccount(email);
+  } catch (error) {
+    throw asHttpsError(error, email);
+  }
+  if (!account) {
+    throw new HttpsError("not-found", "No account uses that email address.");
+  }
+  return account;
+});
+
+/**
+ * Then deletes that account and everything in it, as its owner's own
+ * "Delete account" would: for someone who asked by email.
+ */
+export const deleteAccountOf = onCall(
+  { timeoutSeconds: 300 },
+  async (request) => {
+    requireModerator(request);
+    const uid = request.data?.uid;
+    if (typeof uid !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) {
+      throw new HttpsError("invalid-argument", "Which account?");
+    }
+    let user: UserRecord;
+    try {
+      user = await getAuth().getUser(uid);
+    } catch (error) {
+      if ((error as { code?: string }).code === "auth/user-not-found") {
+        throw new HttpsError("not-found", "That account is already deleted.");
+      }
+      throw asHttpsError(error, uid);
+    }
+    const refusal = moderatorDeletionRefusal(user);
+    if (refusal) throw new HttpsError("failed-precondition", refusal);
+    try {
+      const deleted = await deleteAccount(uid);
+      logger.info("A moderator deleted an account", {
+        uid,
+        moderator: request.auth!.uid,
+        ...deleted,
+      });
+      return deleted;
+    } catch (error) {
+      logger.error("Could not delete an account", { uid, error });
+      throw new HttpsError(
+        "unavailable",
+        "The account could not be deleted just now. Please try again.",
+      );
+    }
+  },
+);
+
+/**
+ * Every night: reports the moderator closed more than a year ago, as the
+ * privacy policy promises. Open reports stay.
+ */
+export const deleteOldReports = onSchedule(
+  {
+    schedule: "every day 04:00",
+    timeZone: "America/Los_Angeles",
+    region: REGION,
+  },
+  async () => {
+    const deleted = await deleteReportsClosedBefore(
+      retentionCutoff(new Date()),
+    );
+    if (deleted) logger.info("Deleted old reports", { deleted });
+  },
+);
+
+/**
+ * Only moderators may spend money on the model, or act on someone else's
+ * account. Matched as firestore.rules
  * match them: on a verified email.
  */
 function requireModerator(request: CallableRequest): void {

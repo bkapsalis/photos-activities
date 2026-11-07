@@ -205,30 +205,34 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                               borderRadius: BorderRadius.circular(8),
                               child: Semantics(
                                 button: true,
-                                label: "Bill's Bay Area, return to home",
+                                label:
+                                    "Bill's Bay Area Fun Activities, return to home",
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 4,
                                     horizontal: 4,
                                   ),
-                                  child: Column(
+                                  // The full name doesn't fit beside the
+                                  // buttons on a phone, so it takes two lines,
+                                  // as on the website and the sign-in screen.
+                                  child: const Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Discover Bay Area',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.textSecondary,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                      ),
-                                      const Text(
                                         "Bill's Bay Area",
                                         style: TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Fun Activities',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ],

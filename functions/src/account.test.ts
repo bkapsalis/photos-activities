@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { deletionRefusal, RECENT_SIGN_IN_SECONDS } from "./account";
+import {
+  deletionRefusal,
+  moderatorDeletionRefusal,
+  RECENT_SIGN_IN_SECONDS,
+} from "./account";
 
 const now = 1_800_000_000;
 
@@ -51,5 +55,22 @@ describe("deletionRefusal", () => {
       email_verified: false,
     };
     assert.equal(deletionRefusal(unverified, now), null);
+  });
+});
+
+describe("moderatorDeletionRefusal", () => {
+  it("lets a moderator delete anyone else's account", () => {
+    const user = { email: "pat@example.com", emailVerified: true };
+    assert.equal(moderatorDeletionRefusal(user), null);
+  });
+
+  it("keeps the moderator's own account, and its photos", () => {
+    const user = { email: "BKapsalis@gmail.com", emailVerified: true };
+    assert.match(moderatorDeletionRefusal(user) ?? "", /moderator/);
+  });
+
+  it("does not take an unverified moderator email for the moderator", () => {
+    const user = { email: "bkapsalis@gmail.com", emailVerified: false };
+    assert.equal(moderatorDeletionRefusal(user), null);
   });
 });

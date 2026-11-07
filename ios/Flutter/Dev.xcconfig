@@ -1,5 +1,5 @@
 // Dev flavor configuration
 PRODUCT_BUNDLE_IDENTIFIER = com.billsbayarea.app.dev
-DISPLAY_NAME = Bill's Bay Area Fun Activities (Dev)
+DISPLAY_NAME = Bay Area Fun
 // No PRODUCT_NAME here: the app bundle stays Runner.app, which Flutter's
 // tooling expects. DISPLAY_NAME is the name shown under the icon.

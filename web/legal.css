@@ -1,0 +1,55 @@
+/* Shared by privacy.html and delete-account.html: plain pages that load
+   without the Flutter app, so the app stores and search engines can read
+   them. */
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --muted: #5f5f5f;
+  --border: #e0e0e0;
+  --accent: #2e7d32;
+  --accent-soft: #e8f5e9;
+  --warn-soft: #fff8e1;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --text: #ececec;
+    --muted: #b0b0b0;
+    --border: #333333;
+    --accent: #81c784;
+    --accent-soft: #1b2e1c;
+    --warn-soft: #2e2a1b;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+header p { margin: 4px 0; color: var(--muted); }
+h1 { font-size: 1.8rem; line-height: 1.25; margin: 0 0 8px; }
+h2 { font-size: 1.25rem; margin: 36px 0 8px; }
+h3 { font-size: 1.05rem; margin: 24px 0 4px; }
+a { color: var(--accent); }
+ul, ol { padding-left: 1.4em; }
+li { margin: 4px 0; }
+.box {
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 4px 20px;
+  margin: 24px 0;
+}
+.box.note { background: var(--warn-soft); }
+.steps li { margin: 8px 0; }
+nav { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); }
+nav a { margin-right: 20px; }
