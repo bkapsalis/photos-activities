@@ -154,9 +154,60 @@ class BannedUser {
   const BannedUser({required this.id, required this.name, this.bannedAt});
 }
 
+/// Someone's account as findAccountByEmail describes it, for the moderator
+/// to check it is the right one before deleting it.
+class AccountToDelete {
+  final String uid;
+  final String? name;
+  final String? email;
+
+  /// How they sign in: "google.com", "apple.com" or "password".
+  final List<String> signInWith;
+  final DateTime? createdAt;
+  final DateTime? lastSignInAt;
+  final int photos;
+
+  /// Comments and chat messages.
+  final int messages;
+  final int likes;
+
+  const AccountToDelete({
+    required this.uid,
+    this.name,
+    this.email,
+    this.signInWith = const [],
+    this.createdAt,
+    this.lastSignInAt,
+    this.photos = 0,
+    this.messages = 0,
+    this.likes = 0,
+  });
+
+  factory AccountToDelete.fromJson(Object? json) {
+    final map = json is Map ? json : const {};
+    int count(String key) => (map[key] as num?)?.toInt() ?? 0;
+    DateTime? date(String key) =>
+        DateTime.tryParse(map[key] as String? ?? '')?.toLocal();
+    return AccountToDelete(
+      uid: map['uid'] as String? ?? '',
+      name: map['name'] as String?,
+      email: map['email'] as String?,
+      signInWith: [
+        for (final provider in map['signInWith'] as List? ?? const [])
+          '$provider',
+      ],
+      createdAt: date('createdAt'),
+      lastSignInAt: date('lastSignInAt'),
+      photos: count('photos'),
+      messages: count('messages'),
+      likes: count('likes'),
+    );
+  }
+}
+
 /// The moderator's tools: reports, bans, what the content filter took
-/// down, and the filter's switch. firestore.rules let only a moderator use
-/// any of it.
+/// down, the filter's switch, and deleting someone's account for them.
+/// firestore.rules, and the functions, let only a moderator use any of it.
 class ModerationService {
   final FirebaseFirestore _db;
 
@@ -274,4 +325,30 @@ class ModerationService {
   Future<void> discard(String key) => _functions
       .httpsCallable('discardRemovedPost')
       .call<Object?>({'key': key});
+
+  // ── Deleting someone's account ─────────────────────
+  // For someone who emails to ask, as web/delete-account.html offers.
+
+  /// The account signed up with [email], or null when no account uses it.
+  Future<AccountToDelete?> findAccount(String email) async {
+    try {
+      final result = await _functions
+          .httpsCallable('findAccountByEmail')
+          .call<Object?>({'email': email.trim()});
+      return AccountToDelete.fromJson(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'not-found') return null;
+      rethrow;
+    }
+  }
+
+  /// Deletes the account and everything in it, as its owner's own
+  /// "Delete account" would.
+  Future<void> deleteAccountOf(String uid) => _functions
+      .httpsCallable(
+        'deleteAccountOf',
+        // Someone who posted a great deal takes a while to clear.
+        options: HttpsCallableOptions(timeout: const Duration(minutes: 5)),
+      )
+      .call<Object?>({'uid': uid});
 }
