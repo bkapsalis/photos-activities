@@ -31,6 +31,11 @@ class EnvConfig {
   /// client id the project issues.
   String get googleCloudProjectNumber => googleServerClientId.split('-').first;
 
+  /// This environment's website: Firebase Hosting's default site, named
+  /// after the project. The privacy policy and the account-deletion page
+  /// live there beside the web app (web/privacy.html, web/delete-account.html).
+  String get website => 'https://$firebaseProjectId.web.app';
+
   static late EnvConfig _instance;
 
   static void init(EnvConfig config) {

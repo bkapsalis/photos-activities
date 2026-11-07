@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/contact.dart';
+import '../../core/config/env_config.dart';
 import '../../core/theme/app_colors.dart';
 
 /// The rules everyone agrees to by signing in: zero tolerance for
@@ -126,6 +127,17 @@ class ContactLink extends StatelessWidget {
   }
 }
 
+/// The privacy policy, a page on this environment's website (web/privacy.html).
+/// Apple wants it reachable from inside the app, not only from the store
+/// listing.
+class PrivacyPolicy {
+  const PrivacyPolicy._();
+
+  static Uri get url => Uri.parse('${EnvConfig.instance.website}/privacy');
+
+  static Future<void> open() => launchUrl(url);
+}
+
 /// Under the sign-in buttons: signing in, or continuing as a guest, is
 /// agreeing to the rules.
 class RulesAgreementNote extends StatelessWidget {
@@ -134,6 +146,12 @@ class RulesAgreementNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(fontSize: 12, color: AppColors.textSecondary);
+    const link = TextStyle(
+      fontSize: 12,
+      color: AppColors.primary,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -141,19 +159,15 @@ class RulesAgreementNote extends StatelessWidget {
         const Text('By continuing, you agree to the ', style: style),
         InkWell(
           onTap: () => CommunityRulesScreen.show(context),
-          child: const Text(
-            'Community rules',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
-            ),
-          ),
+          child: const Text('Community rules', style: link),
         ),
         const Text(
-          ': no objectionable content and no abusive behavior.',
+          ': no objectionable content and no abusive behavior. ',
           style: style,
+        ),
+        const InkWell(
+          onTap: PrivacyPolicy.open,
+          child: Text('Privacy policy', style: link),
         ),
       ],
     );

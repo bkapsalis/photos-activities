@@ -446,6 +446,13 @@ class _SafetySection extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => CommunityRulesScreen.show(context),
         ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.privacy_tip_outlined, size: 20),
+          title: Text('Privacy policy'),
+          trailing: Icon(Icons.open_in_new, size: 18),
+          onTap: PrivacyPolicy.open,
+        ),
         const Align(alignment: Alignment.centerLeft, child: ContactLink()),
       ],
     );

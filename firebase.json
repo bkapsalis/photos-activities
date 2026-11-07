@@ -30,6 +30,7 @@
   ],
   "hosting": {
     "public": "build/web",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",
