@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/user_action.dart';
 import '../../core/widgets/app_network_image.dart';
 import '../../core/widgets/live_data.dart';
+import '../../core/widgets/shared_widgets.dart';
 
 /// The moderator's review screen: the AI content filter's switch, open
 /// reports, what the filter took down, and who is banned. Apple expects
@@ -38,20 +39,23 @@ class ModerationScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: Column(
-          children: [
-            _FilterSwitch(service: service),
-            const Divider(height: 1),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _ReportsTab(service: service),
-                  _RemovedTab(service: service),
-                  _BannedTab(service: service),
-                ],
+        // A readable column on a tablet, not cards stretched edge to edge.
+        body: ReadableWidth(
+          child: Column(
+            children: [
+              _FilterSwitch(service: service),
+              const Divider(height: 1),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _ReportsTab(service: service),
+                    _RemovedTab(service: service),
+                    _BannedTab(service: service),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -318,6 +318,27 @@ class ResponsiveLayout extends StatelessWidget {
   }
 }
 
+/// Keeps a page's content to a comfortable reading width on a tablet or a
+/// wide window, centred, so lines and list rows don't run across the whole
+/// screen. On a phone it changes nothing.
+class ReadableWidth extends StatelessWidget {
+  final double maxWidth;
+  final Widget child;
+
+  const ReadableWidth({super.key, this.maxWidth = 720, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: SizedBox(width: double.infinity, child: child),
+      ),
+    );
+  }
+}
+
 class CategoryChip extends StatelessWidget {
   final String label;
   final bool isSelected;

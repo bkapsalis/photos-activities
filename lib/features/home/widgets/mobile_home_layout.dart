@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/data/mock_data.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/utils/photo_sorting.dart';
-import '../../../core/utils/upload_sources.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/live_data.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import '../../../core/widgets/upload_access.dart';
 import '../../auth/account_button.dart';
@@ -16,12 +14,11 @@ import '../../../core/utils/permissions.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/services/view_mode_service.dart';
 import 'delete_location_dialog.dart';
+import 'home_sheets.dart';
 import 'location_tab_bar.dart';
 import 'map_toggle.dart';
 import 'photo_feed_view.dart';
 import 'photo_masonry_grid.dart';
-import 'upload_images_dialog.dart';
-import 'upload_photo_dialog.dart';
 import 'view_mode_toggle_button.dart';
 
 class MobileHomeLayout extends StatefulWidget {
@@ -257,10 +254,11 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                                   size: 24,
                                 ),
                                 tooltip: 'Location Chats',
-                                onPressed: () => _showLocationChats(
+                                onPressed: () => showLocationChats(
                                   context,
-                                  currentCategory,
-                                  firestoreService,
+                                  category: currentCategory,
+                                  firestoreService: firestoreService,
+                                  onChatTap: widget.onChatTap,
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -475,7 +473,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
                   ? const SizedBox.shrink()
                   : FloatingActionButton(
                       onPressed: () =>
-                          _showUploadOptions(context, currentCategory),
+                          showUploadOptions(context, currentCategory),
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       child: const Icon(Icons.add, size: 28),
@@ -530,131 +528,6 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
             label: 'Profile',
           ),
         ],
-      ),
-    );
-  }
-
-  void _showUploadOptions(BuildContext context, String category) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                'Upload',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: AppColors.primary),
-              title: const Text('Take a Photo'),
-              subtitle: const Text('Open camera and upload'),
-              onTap: () {
-                Navigator.pop(ctx);
-                UploadPhotoDialog.showCamera(
-                  context,
-                  initialCategory: category,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.photo_library,
-                color: AppColors.primary,
-              ),
-              title: const Text('Upload Image or Images'),
-              subtitle: const Text(uploadSourcesSummary),
-              onTap: () {
-                Navigator.pop(ctx);
-                UploadImagesDialog.show(context, initialCategory: category);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLocationChats(
-    BuildContext context,
-    String category,
-    FirestoreService firestoreService,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.8,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const Icon(Icons.forum, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$category — Location Chats',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: LiveData<List<String>>(
-                  identity: category,
-                  stream: () =>
-                      firestoreService.streamDistinctLocations(category),
-                  errorMessage: 'Locations could not be loaded.',
-                  builder: (context, locations) {
-                    if (locations.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No locations yet. Upload photos to create location chats!',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      controller: scrollController,
-                      itemCount: locations.length,
-                      itemBuilder: (context, index) {
-                        final locName = locations[index];
-                        return ListTile(
-                          leading: const Icon(
-                            Icons.chat_bubble_outline,
-                            color: AppColors.primary,
-                          ),
-                          title: Text(locName),
-                          subtitle: Text(
-                            category,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            widget.onChatTap?.call(locName);
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
       ),
     );
   }

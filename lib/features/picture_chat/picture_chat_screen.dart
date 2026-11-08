@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import '../../core/constants/constants.dart';
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/services/photo_deletion_service.dart';
@@ -86,9 +88,17 @@ class PictureChatScreen extends StatelessWidget {
           );
         }
 
-        return ResponsiveLayout(
-          mobileLayout: _MobilePictureChat(photo: photo, onClose: onClose),
-          webLayout: _WebPictureModal(photo: photo, onClose: onClose),
+        return LayoutBuilder(
+          builder: (context, constraints) =>
+              showsPhotoBesideChat(constraints.biggest, isWeb: kIsWeb)
+              ? _WidePictureChat(
+                  photo: photo,
+                  onClose: onClose,
+                  // In the app the screen is all its own; in a browser
+                  // it floats over the page like any site's photo viewer.
+                  fillScreen: !kIsWeb,
+                )
+              : _MobilePictureChat(photo: photo, onClose: onClose),
         );
       },
     );
@@ -431,6 +441,16 @@ class _MobilePictureChat extends StatelessWidget {
   }
 }
 
+/// Whether the photo and its comments sit side by side at [size], rather
+/// than the photo across the top as on a phone.
+///
+/// In a browser that is any window 600 wide. In the app it also takes a
+/// screen wider than it is tall: a tablet held upright shows the photo far
+/// bigger across the top than squeezed beside the comments.
+@visibleForTesting
+bool showsPhotoBesideChat(Size size, {required bool isWeb}) =>
+    size.width >= Breakpoints.mobile && (isWeb || size.width > size.height);
+
 /// Width / height. Photos stored before aspect ratios were recorded, or with
 /// a bad value, fall back to square; BoxFit.contain keeps them uncropped.
 double _safeAspect(double ratio) => ratio.isFinite && ratio > 0 ? ratio : 1.0;
@@ -468,281 +488,310 @@ double _safeAspect(double ratio) => ratio.isFinite && ratio > 0 ? ratio : 1.0;
   return (photoWidth: photoWidth, chatWidth: chatWidth);
 }
 
-// ── Web: Modal with photo left, comments right ────────
+// ── Wide: photo left, comments right ──────────────────
 
-class _WebPictureModal extends StatelessWidget {
+class _WidePictureChat extends StatelessWidget {
   final PhotoPost photo;
   final VoidCallback? onClose;
 
-  const _WebPictureModal({required this.photo, this.onClose});
+  /// The whole screen, as on a tablet, rather than a modal over the page.
+  final bool fillScreen;
+
+  const _WidePictureChat({
+    required this.photo,
+    this.onClose,
+    this.fillScreen = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black26,
-      body: Center(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Size the modal to the available window space (minus margin)
-            // so it never gets clipped/overlapped when the browser is resized.
-            final maxWidth = (constraints.maxWidth * 0.85).clamp(360.0, 1400.0);
-            final height = (constraints.maxHeight * 0.85).clamp(360.0, 820.0);
+      backgroundColor: fillScreen ? Colors.white : Colors.black26,
+      body: SafeArea(
+        top: fillScreen,
+        bottom: fillScreen,
+        child: Center(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Size the modal to the available window space (minus margin)
+              // so it never gets clipped/overlapped when the browser is resized.
+              final maxWidth = fillScreen
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth * 0.85).clamp(360.0, 1400.0);
+              final height = fillScreen
+                  ? constraints.maxHeight
+                  : (constraints.maxHeight * 0.85).clamp(360.0, 820.0);
 
-            final (:photoWidth, :chatWidth) = webModalSplit(
-              maxWidth: maxWidth,
-              height: height,
-              aspectRatio: photo.aspectRatio,
-            );
-            final width = photoWidth + 1 + chatWidth; // 1: the divider
-            return Container(
-              width: width,
-              height: height,
-              margin: const EdgeInsets.all(40),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 32,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Row(
-                children: [
-                  // Left: Photo
-                  SizedBox(
-                    width: photoWidth,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Container(
-                                color: Colors.black,
-                                child: TapToEnlarge(
-                                  photo: photo,
-                                  child: AppNetworkImage(
-                                    photo.imageUrl,
-                                    fit: BoxFit.contain,
-                                    // Shown on black: dark loading and error states.
-                                    onDark: true,
+              final split = webModalSplit(
+                maxWidth: maxWidth,
+                height: height,
+                aspectRatio: photo.aspectRatio,
+              );
+              final chatWidth = split.chatWidth;
+              // Filling the screen, the photo panel takes all the rest and
+              // letterboxes the photo; a modal shrinks to the photo instead.
+              final photoWidth = fillScreen
+                  ? maxWidth - 1 - chatWidth
+                  : split.photoWidth;
+              final width = photoWidth + 1 + chatWidth; // 1: the divider
+              return Container(
+                width: width,
+                height: height,
+                margin: fillScreen ? null : const EdgeInsets.all(40),
+                decoration: fillScreen
+                    ? const BoxDecoration(color: Colors.white)
+                    : BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                clipBehavior: Clip.antiAlias,
+                child: Row(
+                  children: [
+                    // Left: Photo
+                    SizedBox(
+                      width: photoWidth,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Container(
+                                  color: Colors.black,
+                                  child: TapToEnlarge(
+                                    photo: photo,
+                                    child: AppNetworkImage(
+                                      photo.imageUrl,
+                                      fit: BoxFit.contain,
+                                      // Shown on black: dark loading and error states.
+                                      onDark: true,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                top: 12,
-                                left: 12,
-                                child: LocationPill(
-                                  locationName:
-                                      '${photo.location.name} · ${photo.location.region ?? ''}',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // User info bar
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          color: Colors.white,
-                          child: Row(
-                            children: [
-                              UserAvatar(
-                                initials: photo.user.initials,
-                                color: photo.user.avatarColor,
-                                size: 32,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      photo.user.name,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${photo.user.role ?? "Contributor"} · Bay Area',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              LikeButton(
-                                photoId: photo.id,
-                                count: photo.heartCount,
-                              ),
-                              const SizedBox(width: 12),
-                              // Only the owner or a moderator; firestore.rules refuse anyone else.
-                              if (canModify(photo.user.id))
-                                PopupMenuButton<String>(
-                                  icon: const Icon(
-                                    Icons.more_vert,
-                                    size: 20,
-                                    color: AppColors.textSecondary,
+                                Positioned(
+                                  top: 12,
+                                  left: 12,
+                                  child: LocationPill(
+                                    locationName:
+                                        '${photo.location.name} · ${photo.location.region ?? ''}',
                                   ),
-                                  onSelected: (val) async {
-                                    if (val == 'edit') {
-                                      EditPhotoDialog.show(context, photo);
-                                    } else if (val == 'delete') {
-                                      final confirm = await showDialog<bool>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text('Delete Photo?'),
-                                          content: const Text(
-                                            'Are you sure you want to delete this photo post?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, false),
-                                              child: const Text('Cancel'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // User info bar
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            color: Colors.white,
+                            child: Row(
+                              children: [
+                                UserAvatar(
+                                  initials: photo.user.initials,
+                                  color: photo.user.avatarColor,
+                                  size: 32,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        photo.user.name,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${photo.user.role ?? "Contributor"} · Bay Area',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                LikeButton(
+                                  photoId: photo.id,
+                                  count: photo.heartCount,
+                                ),
+                                const SizedBox(width: 12),
+                                // Only the owner or a moderator; firestore.rules refuse anyone else.
+                                if (canModify(photo.user.id))
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(
+                                      Icons.more_vert,
+                                      size: 20,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    onSelected: (val) async {
+                                      if (val == 'edit') {
+                                        EditPhotoDialog.show(context, photo);
+                                      } else if (val == 'delete') {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text('Delete Photo?'),
+                                            content: const Text(
+                                              'Are you sure you want to delete this photo post?',
                                             ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, true),
-                                              style: TextButton.styleFrom(
-                                                foregroundColor: Colors.red,
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, false),
+                                                child: const Text('Cancel'),
                                               ),
-                                              child: const Text('Delete'),
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, true),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: Colors.red,
+                                                ),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          // Image file and comments go with it.
+                                          await PhotoDeletionService()
+                                              .deleteOne(
+                                                photoId: photo.id,
+                                                imageUrl: photo.imageUrl,
+                                              );
+                                          if (context.mounted) {
+                                            (onClose ??
+                                                () => Navigator.pop(context))();
+                                          }
+                                        }
+                                      }
+                                    },
+                                    itemBuilder: (_) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Edit Photo'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.delete,
+                                              size: 18,
+                                              color: Colors.red,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Delete Photo',
+                                              style: TextStyle(
+                                                color: Colors.red,
+                                              ),
                                             ),
                                           ],
                                         ),
-                                      );
-                                      if (confirm == true) {
-                                        // Image file and comments go with it.
-                                        await PhotoDeletionService().deleteOne(
-                                          photoId: photo.id,
-                                          imageUrl: photo.imageUrl,
-                                        );
-                                        if (context.mounted) {
-                                          (onClose ??
-                                              () => Navigator.pop(context))();
-                                        }
-                                      }
-                                    }
-                                  },
-                                  itemBuilder: (_) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.edit, size: 18),
-                                          SizedBox(width: 8),
-                                          Text('Edit Photo'),
-                                        ],
                                       ),
+                                    ],
+                                  )
+                                else
+                                  SafetyMenuButton(
+                                    target: ReportTarget.photo(photo),
+                                    icon: const Icon(
+                                      Icons.more_vert,
+                                      size: 20,
+                                      color: AppColors.textSecondary,
                                     ),
-                                    const PopupMenuItem(
-                                      value: 'delete',
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.delete,
-                                            size: 18,
-                                            color: Colors.red,
-                                          ),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Delete Photo',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                SafetyMenuButton(
-                                  target: ReportTarget.photo(photo),
-                                  icon: const Icon(
-                                    Icons.more_vert,
-                                    size: 20,
-                                    color: AppColors.textSecondary,
                                   ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        // The map button sits on its own row under the photo rather than
-                        // as an icon in the crowded user bar, where it was easy to miss.
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: MapLocationButton(
-                              photo: photo,
-                              prominent: true,
+                              ],
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const VerticalDivider(width: 1),
-
-                  // Right: Comments
-                  SizedBox(
-                    width: chatWidth,
-                    child: Column(
-                      children: [
-                        // Close button, beside the moderator's AI button.
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            children: [
-                              // Moderators only: each look by the AI costs
-                              // money.
-                              if (isAdmin())
-                                Expanded(
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: AnimalInfoButton(photoId: photo.id),
-                                  ),
-                                )
-                              else
-                                const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 20),
-                                onPressed:
-                                    onClose ?? () => Navigator.pop(context),
+                          // The map button sits on its own row under the photo rather than
+                          // as an icon in the crowded user bar, where it was easy to miss.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: MapLocationButton(
+                                photo: photo,
+                                prominent: true,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-
-                        // Comments stream
-                        Expanded(child: _Comments(photoId: photo.id)),
-
-                        // Input
-                        ChatInputBar(
-                          hintText: 'Add a comment...',
-                          onSend: (text) =>
-                              _addComment(context, photo.id, text),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+
+                    const VerticalDivider(width: 1),
+
+                    // Right: Comments
+                    SizedBox(
+                      width: chatWidth,
+                      child: Column(
+                        children: [
+                          // Close button, beside the moderator's AI button.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                // Moderators only: each look by the AI costs
+                                // money.
+                                if (isAdmin())
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: AnimalInfoButton(
+                                        photoId: photo.id,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  const Spacer(),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 20),
+                                  onPressed:
+                                      onClose ?? () => Navigator.pop(context),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Comments stream
+                          Expanded(child: _Comments(photoId: photo.id)),
+
+                          // Input
+                          ChatInputBar(
+                            hintText: 'Add a comment...',
+                            onSend: (text) =>
+                                _addComment(context, photo.id, text),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

@@ -16,6 +16,7 @@ import '../../auth/upgrade_account_screen.dart';
 import '../../../core/utils/permissions.dart';
 import '../../../core/services/view_mode_service.dart';
 import 'delete_location_dialog.dart';
+import 'home_sheets.dart';
 import 'location_tab_bar.dart';
 import 'map_toggle.dart';
 import 'photo_feed_view.dart';
@@ -27,6 +28,8 @@ import 'view_mode_toggle_button.dart';
 /// Which of the three web views is showing.
 enum _WebView { feed, explore, map }
 
+/// The wide home layout: browsers 600 or more wide, and tablets either way
+/// up. Phones get MobileHomeLayout.
 class WebHomeLayout extends StatefulWidget {
   final int selectedCategoryIndex;
   final ValueChanged<int> onCategoryChanged;
@@ -182,163 +185,212 @@ class _WebHomeLayoutState extends State<WebHomeLayout> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // Top navigation bar
-          _WebTopNav(
-            selectedCategoryIndex: widget.selectedCategoryIndex,
-            onCategoryChanged: widget.onCategoryChanged,
-            onChatTap: widget.onChatTap,
-            searchController: _searchController,
-            onSearchChanged: (val) =>
-                setState(() => _searchQuery = val.trim().toLowerCase()),
-            onHomeTap: () {
-              AnalyticsService.screen('home');
-              _resetToHome();
-            },
-            view: _view,
-            viewMode: widget.viewMode,
-            onViewModeToggled: widget.onViewModeToggled,
-            onExploreTap: () {
-              setState(() {
-                _view = _view == _WebView.explore
-                    ? _WebView.feed
-                    : _WebView.explore;
-                _mapReturn = null;
-              });
-              AnalyticsService.screen(
-                _view == _WebView.explore ? 'explore' : 'home',
-              );
-            },
-            onMapTap: () {
-              _view == _WebView.map ? _leaveMap() : _openMap();
-              AnalyticsService.screen(switch (_view) {
-                _WebView.map => 'map',
-                _WebView.explore => 'explore',
-                _WebView.feed => 'home',
-              });
-            },
+      // Clear of a tablet's status bar. The photos scroll on under the home
+      // indicator, with padding to spare at the end.
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) => _buildBody(
+            context,
+            currentCategory: currentCategory,
+            firestoreService: firestoreService,
+            showSidebar: wideLayoutShowsSidebar(constraints.maxWidth),
+            keepExplore: keepExplore,
+            keepFeed: keepFeed,
           ),
-          const Divider(height: 1),
+        ),
+      ),
+    );
+  }
 
-          // Guest prompt — hidden once the account is registered
-          const GuestBanner(),
+  Widget _buildBody(
+    BuildContext context, {
+    required String currentCategory,
+    required FirestoreService firestoreService,
+    required bool showSidebar,
+    required bool keepExplore,
+    required bool keepFeed,
+  }) {
+    return Column(
+      children: [
+        // Top navigation bar
+        _WebTopNav(
+          selectedCategoryIndex: widget.selectedCategoryIndex,
+          onCategoryChanged: widget.onCategoryChanged,
+          onChatTap: widget.onChatTap,
+          // Without the sidebar, the chats open from the top bar.
+          onChatsTap: showSidebar
+              ? null
+              : () => showLocationChats(
+                  context,
+                  category: currentCategory,
+                  firestoreService: firestoreService,
+                  onChatTap: widget.onChatTap,
+                ),
+          searchController: _searchController,
+          onSearchChanged: (val) =>
+              setState(() => _searchQuery = val.trim().toLowerCase()),
+          onHomeTap: () {
+            AnalyticsService.screen('home');
+            _resetToHome();
+          },
+          view: _view,
+          viewMode: widget.viewMode,
+          onViewModeToggled: widget.onViewModeToggled,
+          onExploreTap: () {
+            setState(() {
+              _view = _view == _WebView.explore
+                  ? _WebView.feed
+                  : _WebView.explore;
+              _mapReturn = null;
+            });
+            AnalyticsService.screen(
+              _view == _WebView.explore ? 'explore' : 'home',
+            );
+          },
+          onMapTap: () {
+            _view == _WebView.map ? _leaveMap() : _openMap();
+            AnalyticsService.screen(switch (_view) {
+              _WebView.map => 'map',
+              _WebView.explore => 'explore',
+              _WebView.feed => 'home',
+            });
+          },
+        ),
+        const Divider(height: 1),
 
-          // Body: Explore, or the usual Sidebar + Grid.
-          // Explore spans every category, so the category-scoped sidebar is
-          // replaced rather than kept alongside it.
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_view != _WebView.explore)
-                  KeyedSubtree(
-                    key: const ValueKey('feed'),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left sidebar — location list with chat access
+        // Guest prompt — hidden once the account is registered
+        const GuestBanner(),
+
+        // Body: Explore, or the usual Sidebar + Grid.
+        // Explore spans every category, so the category-scoped sidebar is
+        // replaced rather than kept alongside it.
+        Expanded(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (_view != _WebView.explore)
+                KeyedSubtree(
+                  key: const ValueKey('feed'),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left sidebar — location list with chat access
+                      if (showSidebar) ...[
                         _WebSidebar(
                           selectedCategory: currentCategory,
                           firestoreService: firestoreService,
                           onChatTap: widget.onChatTap,
                         ),
                         const VerticalDivider(width: 1),
-
-                        // Main photo grid
-                        Expanded(
-                          child: CategoryPhotosBuilder(
-                            category: currentCategory,
-                            builder: (context, categoryPhotos) {
-                              // Tabs are built from every photo in the category so the
-                              // strip stays stable while searching inside one location.
-                              final tabs = LocationTabs.fromPhotos(
-                                categoryPhotos,
-                              );
-                              final activeLocation = tabs.resolve(
-                                widget.selectedLocation,
-                              );
-
-                              var photos = activeLocation == null
-                                  ? categoryPhotos
-                                  : categoryPhotos
-                                        .where(
-                                          (p) =>
-                                              p.location.name.trim() ==
-                                              activeLocation,
-                                        )
-                                        .toList();
-
-                              // Apply search filter
-                              if (_searchQuery.isNotEmpty) {
-                                photos = photos
-                                    .where(
-                                      (p) =>
-                                          p.location.name
-                                              .toLowerCase()
-                                              .contains(_searchQuery) ||
-                                          (p.location.region
-                                                  ?.toLowerCase()
-                                                  .contains(_searchQuery) ??
-                                              false),
-                                    )
-                                    .toList();
-                              }
-
-                              // Most-liked first, within whichever tab is showing.
-                              photos = photos.sortedByPopularity();
-
-                              return _WebPhotoGrid(
-                                category: currentCategory,
-                                photos: photos,
-                                searchQuery: _searchQuery,
-                                tabs: tabs,
-                                activeLocation: activeLocation,
-                                onLocationChanged: _changeLocation,
-                                onPhotoTap: widget.onPhotoTap,
-                                onChatTap: widget.onChatTap,
-                                scrollController: _feedScrollController,
-                                showMap: _view == _WebView.map,
-                                keepFeed: keepFeed,
-                                viewMode: widget.viewMode,
-                                focusPhotoId: widget.focusPhotoId,
-                                showFeedRequests: widget.showFeedRequests,
-                                gridFocusPhotoId: _gridFocusPending
-                                    ? widget.focusPhotoId
-                                    : null,
-                                onGridFocusDone: () =>
-                                    _gridFocusPending = false,
-                              );
-                            },
-                          ),
-                        ),
                       ],
-                    ),
-                  ),
-                if (keepExplore)
-                  KeyedSubtree(
-                    key: const ValueKey('explore'),
-                    child: Offstage(
-                      offstage: _view != _WebView.explore,
-                      child: TickerMode(
-                        enabled: _view == _WebView.explore,
-                        child: ExploreView(onPhotoTap: widget.onPhotoTap),
+
+                      // Main photo grid
+                      Expanded(
+                        child: CategoryPhotosBuilder(
+                          category: currentCategory,
+                          builder: (context, categoryPhotos) {
+                            // Tabs are built from every photo in the category so the
+                            // strip stays stable while searching inside one location.
+                            final tabs = LocationTabs.fromPhotos(
+                              categoryPhotos,
+                            );
+                            final activeLocation = tabs.resolve(
+                              widget.selectedLocation,
+                            );
+
+                            var photos = activeLocation == null
+                                ? categoryPhotos
+                                : categoryPhotos
+                                      .where(
+                                        (p) =>
+                                            p.location.name.trim() ==
+                                            activeLocation,
+                                      )
+                                      .toList();
+
+                            // Apply search filter
+                            if (_searchQuery.isNotEmpty) {
+                              photos = photos
+                                  .where(
+                                    (p) =>
+                                        p.location.name.toLowerCase().contains(
+                                          _searchQuery,
+                                        ) ||
+                                        (p.location.region
+                                                ?.toLowerCase()
+                                                .contains(_searchQuery) ??
+                                            false),
+                                  )
+                                  .toList();
+                            }
+
+                            // Most-liked first, within whichever tab is showing.
+                            photos = photos.sortedByPopularity();
+
+                            return _WebPhotoGrid(
+                              category: currentCategory,
+                              photos: photos,
+                              searchQuery: _searchQuery,
+                              tabs: tabs,
+                              activeLocation: activeLocation,
+                              onLocationChanged: _changeLocation,
+                              onPhotoTap: widget.onPhotoTap,
+                              onChatTap: widget.onChatTap,
+                              scrollController: _feedScrollController,
+                              showMap: _view == _WebView.map,
+                              keepFeed: keepFeed,
+                              viewMode: widget.viewMode,
+                              focusPhotoId: widget.focusPhotoId,
+                              showFeedRequests: widget.showFeedRequests,
+                              gridFocusPhotoId: _gridFocusPending
+                                  ? widget.focusPhotoId
+                                  : null,
+                              onGridFocusDone: () => _gridFocusPending = false,
+                            );
+                          },
+                        ),
                       ),
+                    ],
+                  ),
+                ),
+              if (keepExplore)
+                KeyedSubtree(
+                  key: const ValueKey('explore'),
+                  child: Offstage(
+                    offstage: _view != _WebView.explore,
+                    child: TickerMode(
+                      enabled: _view == _WebView.explore,
+                      child: ExploreView(onPhotoTap: widget.onPhotoTap),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
+
+/// How the wide layout's top bar arranges itself at [width]: on one row or
+/// two, and, when narrow, with the upload buttons as icons alone.
+@visibleForTesting
+({bool oneRow, bool iconOnlyActions}) wideTopBarLayout(double width) =>
+    (oneRow: width >= Breakpoints.oneRowTopBar, iconOnlyActions: width < 760);
+
+/// Whether the wide layout has room for its location-chat sidebar.
+@visibleForTesting
+bool wideLayoutShowsSidebar(double width) => width >= Breakpoints.sidebar;
 
 class _WebTopNav extends StatelessWidget {
   final int selectedCategoryIndex;
   final ValueChanged<int> onCategoryChanged;
   final Function(String locationName)? onChatTap;
+
+  /// Opens the location chats when the sidebar has no room; null while the
+  /// sidebar shows them.
+  final VoidCallback? onChatsTap;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
 
@@ -358,6 +410,7 @@ class _WebTopNav extends StatelessWidget {
     required this.selectedCategoryIndex,
     required this.onCategoryChanged,
     this.onChatTap,
+    this.onChatsTap,
     required this.searchController,
     required this.onSearchChanged,
     required this.onHomeTap,
@@ -370,6 +423,18 @@ class _WebTopNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = wideTopBarLayout(constraints.maxWidth);
+        return layout.oneRow
+            ? _oneRow(context)
+            : _twoRows(context, iconOnlyActions: layout.iconOnlyActions);
+      },
+    );
+  }
+
+  /// A wide window: everything in one row, as most sites do.
+  Widget _oneRow(BuildContext context) {
     return Container(
       height: AppSizing.webTopNavHeight,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -378,176 +443,236 @@ class _WebTopNav extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // Logo + title, tappable as a Home button like any site header.
-            InkWell(
-              onTap: onHomeTap,
-              borderRadius: BorderRadius.circular(8),
-              child: Semantics(
-                button: true,
-                label: "Bill's Bay Area Fun Activities, return to home",
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.landscape,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bill\'s Bay Area',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'Fun Activities',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            _title(),
             const SizedBox(width: 24),
-
-            // Category pills
-            ...List.generate(categories.length, (i) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: CategoryChip(
-                  label: categories[i],
-                  isSelected: i == selectedCategoryIndex,
-                  onTap: () => onCategoryChanged(i),
-                ),
-              );
-            }),
-
+            ..._categoryChips(),
             const SizedBox(width: 24),
-
-            // Explore and Map toggles — the web stand-ins for those tabs on
-            // the mobile bottom bar, in the same order.
-            IconButton(
-              icon: Icon(
-                view == _WebView.explore
-                    ? Icons.explore
-                    : Icons.explore_outlined,
-                size: 22,
-                color: view == _WebView.explore ? AppColors.primary : null,
-              ),
-              tooltip: view == _WebView.explore
-                  ? 'Back to all photos'
-                  : 'Explore',
-              onPressed: onExploreTap,
-            ),
-            IconButton(
-              icon: Icon(
-                view == _WebView.map ? Icons.map : Icons.map_outlined,
-                size: 22,
-                color: view == _WebView.map ? AppColors.primary : null,
-              ),
-              tooltip: view == _WebView.map ? 'Back to all photos' : 'Map',
-              onPressed: onMapTap,
-            ),
-            // Grid/carousel only means something while the feed is showing.
-            if (view == _WebView.feed)
-              ViewModeToggleButton(
-                mode: viewMode,
-                onPressed: onViewModeToggled,
-                iconSize: 22,
-              ),
+            ..._viewButtons(),
             const SizedBox(width: 8),
-
-            // Search
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: SizedBox(
-                height: 36,
-                width: 220,
-                child: TextField(
-                  controller: searchController,
-                  onChanged: onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: 'Search locations...',
-                    hintStyle: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: AppColors.divider),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: AppColors.divider),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            _search(width: 220, height: 36),
             const SizedBox(width: 12),
-
-            // Upload buttons. Web has no floating action button; these are the
-            // equivalent, and they are hidden on the map for the same reason:
-            // nothing on that page says which place an upload would belong to.
-            // Only for those allowed to upload; see UploadAccess.
-            if (view != _WebView.map)
-              UploadAccess(
-                builder: (context, canUpload) => !canUpload
-                    ? const SizedBox.shrink()
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ActionButton(
-                            icon: Icons.camera_alt,
-                            label: 'Camera',
-                            onTap: () => UploadPhotoDialog.showCamera(
-                              context,
-                              initialCategory:
-                                  categories[selectedCategoryIndex],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _ActionButton(
-                            icon: Icons.photo_library,
-                            label: 'Upload Image or Images',
-                            onTap: () => UploadImagesDialog.show(
-                              context,
-                              initialCategory:
-                                  categories[selectedCategoryIndex],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                      ),
-              ),
+            ..._uploadButtons(context, iconOnly: false),
             const AccountButton(size: 34),
           ],
         ),
       ),
     );
+  }
+
+  /// A tablet or a narrower window: the title and buttons on top, with the
+  /// avatar always on screen; the categories and the search underneath.
+  Widget _twoRows(BuildContext context, {required bool iconOnlyActions}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 52,
+            child: Row(
+              children: [
+                _title(),
+                const Spacer(),
+                ..._viewButtons(),
+                const SizedBox(width: 4),
+                ..._uploadButtons(context, iconOnly: iconOnlyActions),
+                const AccountButton(size: 34),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: _categoryChips(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _search(width: iconOnlyActions ? 200 : 260, height: 40),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Logo + title, tappable as a Home button like any site header.
+  Widget _title() {
+    return InkWell(
+      onTap: onHomeTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Semantics(
+        button: true,
+        label: "Bill's Bay Area Fun Activities, return to home",
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.landscape,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bill\'s Bay Area',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    'Fun Activities',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _categoryChips() {
+    return List.generate(categories.length, (i) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: CategoryChip(
+          label: categories[i],
+          isSelected: i == selectedCategoryIndex,
+          onTap: () => onCategoryChanged(i),
+        ),
+      );
+    });
+  }
+
+  /// Location chats (when the sidebar has no room), then Explore and Map,
+  /// the stand-ins for those tabs on the phone's bottom bar, in the same
+  /// order, then grid or carousel.
+  List<Widget> _viewButtons() {
+    return [
+      if (onChatsTap != null)
+        IconButton(
+          icon: const Icon(Icons.forum_outlined, size: 22),
+          tooltip: 'Location Chats',
+          onPressed: onChatsTap,
+        ),
+      IconButton(
+        icon: Icon(
+          view == _WebView.explore ? Icons.explore : Icons.explore_outlined,
+          size: 22,
+          color: view == _WebView.explore ? AppColors.primary : null,
+        ),
+        tooltip: view == _WebView.explore ? 'Back to all photos' : 'Explore',
+        onPressed: onExploreTap,
+      ),
+      IconButton(
+        icon: Icon(
+          view == _WebView.map ? Icons.map : Icons.map_outlined,
+          size: 22,
+          color: view == _WebView.map ? AppColors.primary : null,
+        ),
+        tooltip: view == _WebView.map ? 'Back to all photos' : 'Map',
+        onPressed: onMapTap,
+      ),
+      // Grid/carousel only means something while the feed is showing.
+      if (view == _WebView.feed)
+        ViewModeToggleButton(
+          mode: viewMode,
+          onPressed: onViewModeToggled,
+          iconSize: 22,
+        ),
+    ];
+  }
+
+  Widget _search({required double width, required double height}) {
+    return SizedBox(
+      height: height,
+      width: width,
+      child: TextField(
+        controller: searchController,
+        onChanged: onSearchChanged,
+        decoration: InputDecoration(
+          hintText: 'Search locations...',
+          hintStyle: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+          prefixIcon: const Icon(Icons.search, size: 18),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide(color: AppColors.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide(color: AppColors.divider),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Upload buttons. The wide layout has no floating action button; these
+  /// are the equivalent, and they are hidden on the map for the same
+  /// reason: nothing on that page says which place an upload would belong
+  /// to. Only for those allowed to upload; see UploadAccess.
+  List<Widget> _uploadButtons(BuildContext context, {required bool iconOnly}) {
+    if (view == _WebView.map) return const [];
+    return [
+      UploadAccess(
+        builder: (context, canUpload) => !canUpload
+            ? const SizedBox.shrink()
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ActionButton(
+                    icon: Icons.camera_alt,
+                    label: 'Camera',
+                    iconOnly: iconOnly,
+                    onTap: () => UploadPhotoDialog.showCamera(
+                      context,
+                      initialCategory: categories[selectedCategoryIndex],
+                    ),
+                  ),
+                  SizedBox(width: iconOnly ? 0 : 8),
+                  _ActionButton(
+                    icon: Icons.photo_library,
+                    label: 'Upload Image or Images',
+                    iconOnly: iconOnly,
+                    onTap: () => UploadImagesDialog.show(
+                      context,
+                      initialCategory: categories[selectedCategoryIndex],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ),
+      ),
+    ];
   }
 }
 
@@ -556,14 +681,26 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
+  /// Just the icon, with the label as its tooltip, where the top bar is
+  /// short of room.
+  final bool iconOnly;
+
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.iconOnly = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (iconOnly) {
+      return IconButton(
+        icon: Icon(icon, size: 22),
+        tooltip: label,
+        onPressed: onTap,
+      );
+    }
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
