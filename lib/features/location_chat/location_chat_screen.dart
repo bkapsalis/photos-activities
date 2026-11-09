@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import '../../core/models/models.dart';
@@ -56,6 +57,15 @@ class LocationChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // In the app, phones and tablets alike get the full-screen chat: the
+    // browser's two panels would leave a tablet's chat a narrow strip.
+    if (!kIsWeb) {
+      return _MobileChatSheet(
+        locationId: locationId,
+        locationName: locationName,
+        onClose: onClose,
+      );
+    }
     return ResponsiveLayout(
       mobileLayout: _MobileChatSheet(
         locationId: locationId,
@@ -107,21 +117,26 @@ class _MobileChatSheet extends StatelessWidget {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Messages Stream
-          Expanded(
-            child: _ChatMessages(
-              locationId: locationId,
-              displayName: displayName,
+      // On a tablet, a column of readable width rather than messages
+      // strung across the screen.
+      body: ReadableWidth(
+        maxWidth: 760,
+        child: Column(
+          children: [
+            // Messages Stream
+            Expanded(
+              child: _ChatMessages(
+                locationId: locationId,
+                displayName: displayName,
+              ),
             ),
-          ),
-          // Input Bar
-          ChatInputBar(
-            hintText: 'Message $displayName community...',
-            onSend: (text) => _sendMessage(context, locationId, text),
-          ),
-        ],
+            // Input Bar
+            ChatInputBar(
+              hintText: 'Message $displayName community...',
+              onSend: (text) => _sendMessage(context, locationId, text),
+            ),
+          ],
+        ),
       ),
     );
   }
