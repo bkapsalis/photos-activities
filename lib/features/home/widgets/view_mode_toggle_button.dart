@@ -4,14 +4,16 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/view_mode_service.dart';
 
-/// The name the toggle shows when touched, held or hovered.
-const viewModeToggleName = 'The Alondra Toggle';
+/// What the toggle says a tap will do, given the layout showing now.
+String viewModeToggleLabel(PhotoViewMode mode) => mode == PhotoViewMode.masonry
+    ? 'Change to Carousel View'
+    : 'Change to Masonry View';
 
 /// Switches the feed between the grid and the carousel.
 ///
 /// The icon shows the layout a tap will switch *to*, the way a play/pause
-/// button does. Its tooltip is the toggle's name, shown on a tap as well as
-/// on a press and hold or a hover; screen readers hear what it does instead.
+/// button does, and its label says so. The label shows on a tap as well as
+/// on a press and hold or a hover, and is what screen readers hear.
 class ViewModeToggleButton extends StatefulWidget {
   final PhotoViewMode mode;
   final VoidCallback onPressed;
@@ -54,17 +56,16 @@ class _ViewModeToggleButtonState extends State<ViewModeToggleButton> {
   @override
   Widget build(BuildContext context) {
     final toCarousel = widget.mode == PhotoViewMode.masonry;
+    final label = viewModeToggleLabel(widget.mode);
     return Tooltip(
       key: _tooltip,
-      message: viewModeToggleName,
+      message: label,
       excludeFromSemantics: true,
       child: IconButton(
         icon: Icon(
           toCarousel ? Icons.view_carousel_outlined : Icons.grid_view,
           size: widget.iconSize,
-          semanticLabel: toCarousel
-              ? 'Switch to carousel view'
-              : 'Switch to grid view',
+          semanticLabel: label,
         ),
         onPressed: _pressed,
       ),

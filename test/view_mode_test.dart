@@ -86,8 +86,8 @@ void main() {
   });
 
   group('toggling between modes', () {
-    testWidgets('a tap shows the toggle\'s name for a moment, while screen '
-        'readers hear what it does', (tester) async {
+    testWidgets('the label says what a tap will do, shows for a moment '
+        'after one, and is what screen readers hear', (tester) async {
       final semantics = tester.ensureSemantics();
       await tester.pumpWidget(
         _FeedWithToggle(
@@ -96,24 +96,24 @@ void main() {
         ),
       );
 
-      expect(find.byTooltip('The Alondra Toggle'), findsOneWidget);
-      expect(find.text('The Alondra Toggle'), findsNothing);
-      expect(find.bySemanticsLabel('Switch to carousel view'), findsOneWidget);
-      expect(find.bySemanticsLabel('The Alondra Toggle'), findsNothing);
+      expect(find.byTooltip('Change to Carousel View'), findsOneWidget);
+      expect(find.text('Change to Carousel View'), findsNothing);
+      expect(find.bySemanticsLabel('Change to Carousel View'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.view_carousel_outlined));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('The Alondra Toggle'), findsOneWidget);
-      expect(find.bySemanticsLabel('Switch to grid view'), findsOneWidget);
+      // Now in the carousel, so the label offers the way back.
+      expect(find.text('Change to Masonry View'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      expect(find.text('The Alondra Toggle'), findsNothing);
+      expect(find.text('Change to Masonry View'), findsNothing);
+      expect(find.bySemanticsLabel('Change to Masonry View'), findsOneWidget);
       semantics.dispose();
     });
 
-    testWidgets('a press and hold shows the name too', (tester) async {
+    testWidgets('a press and hold shows the label too', (tester) async {
       await tester.pumpWidget(
         _FeedWithToggle(
           photos: testPhotos(3),
@@ -123,7 +123,7 @@ void main() {
 
       await tester.longPress(find.byIcon(Icons.view_carousel_outlined));
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('The Alondra Toggle'), findsOneWidget);
+      expect(find.text('Change to Carousel View'), findsOneWidget);
       await tester.pumpAndSettle(const Duration(seconds: 2));
     });
 
