@@ -1,0 +1,4 @@
+# Built JavaScript; `npm run build` makes it from src/.
+lib/
+node_modules/
+*.local

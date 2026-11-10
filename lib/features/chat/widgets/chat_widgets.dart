@@ -1,35 +1,82 @@
+import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/safety_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/shared_widgets.dart';
+import '../../safety/report_dialog.dart';
+
+/// The longest comment or chat message the rules accept (validText in
+/// firestore.rules). Typing stops there rather than having the send refused.
+const maxPostLength = 2000;
 
 class ChatMessageBubble extends StatelessWidget {
   final ChatMessage message;
 
-  const ChatMessageBubble({super.key, required this.message});
+  /// Who is reading; the signed-in user unless a test supplies one.
+  final String? viewerId;
+
+  /// The chat it is in. Given, someone else's message offers Report and
+  /// Block.
+  final String? locationId;
+
+  const ChatMessageBubble({
+    super.key,
+    required this.message,
+    this.viewerId,
+    this.locationId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isMe = message.isMe;
+    // Decided by who is reading, never by the stored message: the same
+    // message is its author's own and someone else's to everyone else.
+    final viewer = viewerId ?? auth.FirebaseAuth.instance.currentUser?.uid;
+    final isMe = viewer != null && message.user.id == viewer;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           if (!isMe)
             Padding(
               padding: const EdgeInsets.only(left: 44, bottom: 4),
-              child: Text(
-                message.user.name,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      message.user.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (locationId != null && message.id.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    SafetyMenuButton(
+                      target: ReportTarget.chat(locationId!, message),
+                      compact: true,
+                      icon: const Icon(
+                        Icons.more_horiz,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           Row(
-            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: isMe
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isMe) ...[
@@ -42,9 +89,14 @@ class ChatMessageBubble extends StatelessWidget {
               ],
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: isMe ? AppColors.chatBubbleMe : AppColors.chatBubbleOther,
+                    color: isMe
+                        ? AppColors.chatBubbleMe
+                        : AppColors.chatBubbleOther,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -56,7 +108,9 @@ class ChatMessageBubble extends StatelessWidget {
                     message.text,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isMe ? AppColors.chatBubbleMeText : AppColors.textPrimary,
+                      color: isMe
+                          ? AppColors.chatBubbleMeText
+                          : AppColors.textPrimary,
                       height: 1.4,
                     ),
                   ),
@@ -73,11 +127,16 @@ class ChatMessageBubble extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isMe
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
               children: [
                 Text(
                   message.timestamp,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 if (message.reactionCount > 0) ...[
                   const SizedBox(width: 8),
@@ -92,10 +151,48 @@ class ChatMessageBubble extends StatelessWidget {
   }
 }
 
-class ChatInputBar extends StatelessWidget {
+class ChatInputBar extends StatefulWidget {
   final String hintText;
 
-  const ChatInputBar({super.key, this.hintText = 'Message the group...'});
+  /// Sends [text]; resolves to whether it went. A send that fails puts the
+  /// text back in the box, so nothing typed is lost.
+  final Future<bool> Function(String text)? onSend;
+
+  const ChatInputBar({
+    super.key,
+    this.hintText = 'Message the group...',
+    this.onSend,
+  });
+
+  @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  final TextEditingController _controller = TextEditingController();
+
+  Future<void> _handleSend() async {
+    final onSend = widget.onSend;
+    final text = _controller.text.trim();
+    if (onSend == null || text.isEmpty) return;
+    // Cleared at once, as a sent message should look: Firestore shows the
+    // message straight away and only confirms it later (much later offline).
+    _controller.clear();
+    final sent = await onSend(text);
+    // Put back a message that did not go, unless something new was typed.
+    if (!sent && mounted && _controller.text.isEmpty) {
+      _controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,37 +206,46 @@ class ChatInputBar extends StatelessWidget {
         top: false,
         child: Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.photo_outlined, color: AppColors.textSecondary),
-              onPressed: () {},
-              iconSize: 22,
-            ),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  hintText,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                child: TextField(
+                  controller: _controller,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(maxPostLength),
+                  ],
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _handleSend(),
+                  decoration: InputDecoration(
+                    hintText: widget.hintText,
+                    hintStyle: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.emoji_emotions_outlined, color: AppColors.textSecondary),
-              onPressed: () {},
-              iconSize: 22,
-            ),
-            Container(
-              width: 38, height: 38,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+            InkWell(
+              onTap: _handleSend,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send, color: Colors.white, size: 18),
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 18),
             ),
           ],
         ),

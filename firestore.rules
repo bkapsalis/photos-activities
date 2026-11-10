@@ -1,0 +1,374 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────
+    // Guests count as signed in: they hold an anonymous Firebase account,
+    // and the app lets them post.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Moderators may edit or delete anything, including the location-tab
+    // bulk delete. Matched on a VERIFIED email: Google sign-in marks its
+    // email verified, while a password account someone registers with this
+    // address stays unverified and gains nothing. Keep in sync with
+    // storage.rules.
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', '') in ['bkapsalis@gmail.com'];
+    }
+
+    // Until config/app sets uploadsOpen, only moderators may add photos;
+    // everyone can still view, like and comment. Flipped in the Firebase
+    // console, no app release needed. A missing document means closed.
+    // storage.rules reads the same document.
+    function uploadsOpen() {
+      let path = /databases/$(database)/documents/config/app;
+      return exists(path) && get(path).data.get('uploadsOpen', false) == true;
+    }
+
+    // A moderator's ban (bannedUsers/{uid}) stops someone posting anything
+    // new. Call after signedIn().
+    function notBanned() {
+      return !exists(/databases/$(database)/documents/bannedUsers/$(request.auth.uid));
+    }
+
+    function ownedByCaller(data) {
+      return signedIn() && data.userId == request.auth.uid;
+    }
+
+    // A new document must name its author as the caller.
+    function createdAsSelf() {
+      return signedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // Counters are bumped with FieldValue.increment; rules see the result.
+    function counterMovedBy(field, delta) {
+      return request.resource.data[field] == resource.data.get(field, 0) + delta;
+    }
+
+    // ── What a post may contain ────────────────────────
+    // Photos, comments and chat messages all carry their author's name,
+    // initials and avatar colour, copied in by the app. Without these checks
+    // a caller could write anything there: another person's name (the
+    // moderator's included), text of any length, a made-up time, a head
+    // start on likes, or a field of the wrong type, which the app cannot
+    // read and which would stop a whole comment thread from loading.
+
+    // The name must be one the app would show for the caller: their guest
+    // name ("Guest" and the first four characters of their uid), the name on
+    // their account, the part of their email before the @, or the app's
+    // fallback. Keep in sync with UserProfile.fromFirebaseUser.
+    function authorNameOk(name) {
+      let token = request.auth.token;
+      return name is string && name.size() > 0 && name.size() <= 80
+        && ((name.matches('Guest [A-Za-z0-9]{4}')
+              && request.auth.uid.matches(name.split(' ')[1] + '.*'))
+          || name == token.get('name', '')
+          || name == token.get('email', '').split('@')[0]
+          || name == 'Bay Explorer');
+    }
+
+    function validAuthor(d) {
+      return authorNameOk(d.userName)
+        && d.userInitials is string && d.userInitials.size() <= 3
+        && d.userAvatarColor is int;
+    }
+
+    // Keep the limit in sync with maxPostLength in chat_widgets.dart.
+    function validText(text) {
+      return text is string && text.trim().size() > 0 && text.size() <= 2000;
+    }
+
+    // A new comment or chat message: only the fields the app writes, sent as
+    // the caller under a name that is theirs, stamped with the server's own
+    // time, and starting from zero on its counter.
+    function newPost(counterField) {
+      let d = request.resource.data;
+      return createdAsSelf()
+        && notBanned()
+        && d.keys().hasOnly(['userId', 'userName', 'userInitials',
+            'userAvatarColor', 'text', 'timestamp', counterField])
+        && d.keys().hasAll(['userId', 'userName', 'userInitials',
+            'userAvatarColor', 'text', 'timestamp'])
+        && validAuthor(d)
+        && validText(d.text)
+        && d.timestamp == request.time
+        && d.get(counterField, 0) == 0;
+    }
+
+    // An author may change the text of what they wrote (unless banned), or,
+    // after a guest registers, the name it is signed with. Never who wrote
+    // it or when.
+    function authorEdit() {
+      let d = request.resource.data;
+      return ownedByCaller(resource.data)
+        && ((onlyChanges(['text']) && validText(d.text) && notBanned())
+          || (onlyChanges(['userName', 'userInitials', 'userAvatarColor'])
+              && validAuthor(d)));
+    }
+
+    function optionalString(v, max) {
+      return v == null || (v is string && v.size() <= max);
+    }
+
+    function optionalNumber(v) {
+      return v == null || v is number;
+    }
+
+    // A new photo: the fields PhotoPost.toFirestore writes, under the
+    // uploader's own name, stamped with the server's time, with no likes or
+    // comments yet.
+    function newPhoto() {
+      let d = request.resource.data;
+      return createdAsSelf()
+        && notBanned()
+        && d.keys().hasOnly(['imageUrl', 'locationId', 'locationName',
+            'locationRegion', 'locationLat', 'locationLng', 'category',
+            'userId', 'userName', 'userInitials', 'userAvatarColor',
+            'heartCount', 'commentCount', 'aspectRatio', 'createdAt',
+            'metadata'])
+        && validAuthor(d)
+        && d.imageUrl is string && d.imageUrl.size() <= 2048
+        && d.locationName is string && d.locationName.size() <= 100
+        && optionalString(d.get('locationRegion', null), 100)
+        && optionalString(d.get('locationId', null), 200)
+        && d.category is string && d.category.size() <= 60
+        && optionalNumber(d.get('locationLat', null))
+        && optionalNumber(d.get('locationLng', null))
+        && d.aspectRatio is number
+        && (d.get('metadata', null) == null || d.metadata is map)
+        && d.get('heartCount', 0) == 0
+        && d.get('commentCount', 0) == 0
+        && d.createdAt == request.time;
+    }
+
+    // What an uploader may change on their own photo afterwards: the edit
+    // dialog's fields, and nothing that counts likes or comments.
+    function ownerDetailsEdit() {
+      let d = request.resource.data;
+      return ownedByCaller(resource.data)
+        && onlyChanges(['locationName', 'locationRegion', 'category'])
+        && d.locationName is string && d.locationName.size() <= 100
+        && optionalString(d.get('locationRegion', null), 100)
+        && d.category is string && d.category.size() <= 60;
+    }
+
+    // The caller's like on a photo, and whether this write adds or removes
+    // it: the photo's like count may only move with it.
+    function myLike(photoId) {
+      return /databases/$(database)/documents/photos/$(photoId)/likes/$(request.auth.uid);
+    }
+
+    function myLikeAppears(photoId) {
+      return !exists(myLike(photoId)) && existsAfter(myLike(photoId));
+    }
+
+    function myLikeGoes(photoId) {
+      return exists(myLike(photoId)) && !existsAfter(myLike(photoId));
+    }
+
+    function heartCountMoves(photoId, delta) {
+      let path = /databases/$(database)/documents/photos/$(photoId);
+      return getAfter(path).data.get('heartCount', 0)
+        == get(path).data.get('heartCount', 0) + delta;
+    }
+
+    // A comment must be counted on its photo in the same write, so the
+    // count shown on the photo always matches the thread.
+    function photoCommentCountMoves(photoId, delta) {
+      let path = /databases/$(database)/documents/photos/$(photoId);
+      return getAfter(path).data.get('commentCount', 0)
+        == get(path).data.get('commentCount', 0) + delta;
+    }
+
+    // ── Photos ─────────────────────────────────────────
+    match /photos/{photoId} {
+      allow read: if true;
+      allow create: if newPhoto() && (isAdmin() || uploadsOpen());
+      allow update: if isAdmin()
+        || ownerDetailsEdit()
+        // A like moves the count by one only together with the caller's
+        // own like document appearing, and an unlike only with it going:
+        // one like per person, and nobody can add likes for anyone else.
+        || (signedIn() && onlyChanges(['heartCount'])
+            && ((counterMovedBy('heartCount', 1) && myLikeAppears(photoId))
+              || (counterMovedBy('heartCount', -1) && myLikeGoes(photoId))))
+        // Adding or deleting a comment keeps the count in step.
+        || (signedIn() && onlyChanges(['commentCount'])
+            && (counterMovedBy('commentCount', 1)
+                || counterMovedBy('commentCount', -1)));
+      allow delete: if isAdmin() || ownedByCaller(resource.data);
+
+      // ── Likes: photos/{photoId}/likes/{uid} ──────────
+      // One document per person who likes the photo, named by their uid,
+      // written in the same batch as the photo's heartCount moves.
+      match /likes/{userId} {
+        // Your own like; and all of them for the photo's owner or a
+        // moderator, who must list them to clear them when deleting it.
+        allow read: if (signedIn() && userId == request.auth.uid)
+          || isAdmin()
+          || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
+        allow create: if signedIn() && userId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && heartCountMoves(photoId, 1);
+        // Unliking takes the count down with it. Deleting a photo clears its
+        // likes too, which its owner or a moderator may do without counting.
+        allow delete: if (signedIn() && userId == request.auth.uid
+              && heartCountMoves(photoId, -1))
+          || isAdmin()
+          || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
+      }
+    }
+
+    // ── Locations ──────────────────────────────────────
+    // The app only reads these; nothing in it writes them.
+    match /locations/{locationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── App switches ───────────────────────────────────
+    // config/app holds uploadsOpen, which the app reads to decide whether to
+    // offer uploading, and contentFilter, the moderator's switch for the AI
+    // content filter (functions/src/moderation.ts). Only a moderator may
+    // change either.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── AI checks: photoAnalysis/{photoId} ─────────────
+    // What the AI saw in each photo: the safety verdict, the animals, and
+    // whether those have been posted as comments. Written only by Cloud
+    // Functions (functions/src), which the rules do not govern; read only by
+    // moderators, since a verdict on someone's photo is not for everyone.
+    match /photoAnalysis/{photoId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Reports: reports/{reportId} ────────────────────
+    // Anyone signed in, guests included, may report a photo, comment or
+    // chat message someone else posted, naming its real author: the rules
+    // read the post to check. Only moderators read reports and mark them
+    // dealt with.
+    function newReport() {
+      let d = request.resource.data;
+      return signedIn()
+        && d.keys().hasOnly(['reporterId', 'kind', 'path', 'authorId',
+            'authorName', 'preview', 'imageUrl', 'reason', 'details',
+            'createdAt', 'status'])
+        && d.keys().hasAll(['reporterId', 'kind', 'path', 'authorId',
+            'reason', 'createdAt', 'status'])
+        && d.reporterId == request.auth.uid
+        && d.path is string
+        && ((d.kind == 'photo' && d.path.matches('photos/[^/]+'))
+          || (d.kind == 'comment'
+              && d.path.matches('comments/[^/]+/messages/[^/]+'))
+          || (d.kind == 'chat'
+              && d.path.matches('chats/[^/]+/messages/[^/]+')))
+        && d.reason in ['sexual', 'hate', 'violence', 'harassment', 'spam',
+            'other']
+        && optionalString(d.get('authorName', null), 80)
+        && optionalString(d.get('preview', null), 2000)
+        && optionalString(d.get('imageUrl', null), 2048)
+        && optionalString(d.get('details', null), 500)
+        && d.createdAt == request.time
+        && d.status == 'open'
+        && d.authorId != request.auth.uid
+        && get(path('/databases/' + database + '/documents/' + d.path))
+            .data.userId == d.authorId;
+    }
+
+    match /reports/{reportId} {
+      allow create: if newReport();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Blocks and hidden posts: userSafety/{uid} ──────
+    // Whom you have blocked, and the posts you reported and so no longer
+    // see. The app hides both from you; they are yours alone.
+    match /userSafety/{userId} {
+      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['blocked', 'hidden'])
+        && request.resource.data.get('blocked', {}) is map
+        && request.resource.data.get('blocked', {}).size() <= 500
+        && request.resource.data.get('hidden', []) is list
+        && request.resource.data.get('hidden', []).size() <= 1000;
+    }
+
+    // ── Bans: bannedUsers/{uid} ────────────────────────
+    // A moderator bans and unbans; notBanned() above enforces it. A banned
+    // person may see that they are, so the app can tell them.
+    match /bannedUsers/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow write: if isAdmin();
+    }
+
+    // ── Taken down by the filter: blockedContent/{key} ─
+    // Copies of posts the AI content filter removed, for moderators to put
+    // back or delete for good. Written only by Cloud Functions.
+    match /blockedContent/{key} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Notices: users/{uid}/notices/{noticeId} ────────
+    // Tells someone a post of theirs was taken down, or put back. Written
+    // only by Cloud Functions; the app marks each one seen.
+    match /users/{userId}/notices/{noticeId} {
+      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && request.auth.uid == userId
+        && onlyChanges(['seen']) && request.resource.data.seen == true;
+    }
+
+    // ── Chat Messages (Location Chat) ──────────────────
+    match /chats/{locationId}/messages/{messageId} {
+      allow read: if true;
+      allow create: if newPost('reactionCount');
+      // Author updates cover renaming a guest's messages after they register.
+      allow update: if isAdmin() || authorEdit();
+      allow delete: if isAdmin() || ownedByCaller(resource.data);
+    }
+
+    // ── Comments (Picture Chat) ────────────────────────
+    match /comments/{photoId}/messages/{commentId} {
+      allow read: if true;
+      allow create: if newPost('heartCount')
+        && photoCommentCountMoves(photoId, 1);
+      allow update: if isAdmin() || authorEdit();
+      // A photo's owner may clear its comments: deleting a photo removes its
+      // thread first, and that thread holds other people's comments.
+      allow delete: if isAdmin()
+        || ownedByCaller(resource.data)
+        || ownedByCaller(get(/databases/$(database)/documents/photos/$(photoId)).data);
+    }
+
+    // ── Collection group over every "messages" subcollection ──
+    // The path rules above do not apply to collectionGroup queries; only a
+    // recursive wildcard does. Deliberately scoped to the caller's own
+    // messages, so this permits counting and renaming what you wrote and
+    // nothing else.
+    match /{path=**}/messages/{messageId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+    }
+
+    // Likes likewise: the app asks which photos the reader has liked, and
+    // may see only its own.
+    match /{path=**}/likes/{likeId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+    }
+  }
+}

@@ -1,11 +1,11 @@
 {
-    "name": "bills_bay_area",
-    "short_name": "bills_bay_area",
+    "name": "Bill's Bay Area Fun Activities",
+    "short_name": "Bay Area Fun",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FAFAFA",
+    "theme_color": "#4CAF50",
+    "description": "Discover fun things to do in the Bay Area — hiking, museums, historic sites and more!",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

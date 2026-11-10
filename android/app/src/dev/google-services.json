@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1036671893175",
+    "project_id": "photos-activities-dev",
+    "storage_bucket": "photos-activities-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036671893175:android:15e319db2a7671963bd732",
+        "android_client_info": {
+          "package_name": "com.billsbayarea.app.dev"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1036671893175-rk201p3io483nhfffn26mt01ccrvdinq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.billsbayarea.app.dev",
+            "certificate_hash": "b14863e55aee2075788710c0abfc616fdf8bd9de"
+          }
+        },
+        {
+          "client_id": "1036671893175-u1tqrdfs780uq10c9dnjk3dqtmnrjaqg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSuCZzlkgjXk3L-rF6g8c1-VSbSA94pWU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1036671893175-u1tqrdfs780uq10c9dnjk3dqtmnrjaqg.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1036671893175-2a2h0b8hn4hlv2ij7jotbbue90mdo9kg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.billsbayarea.app.dev"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

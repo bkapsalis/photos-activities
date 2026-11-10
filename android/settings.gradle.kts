@@ -19,8 +19,15 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.9.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    id("com.android.application") version "8.12.0" apply false
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services") version("4.4.4") apply false
+    // Uploads the mapping and native symbols Crashlytics needs to read reports.
+    id("com.google.firebase.crashlytics") version("3.0.8") apply false
+    // Instruments app start, screen render and network calls for Performance Monitoring.
+    id("com.google.firebase.firebase-perf") version("2.0.2") apply false
+    // END: FlutterFire Configuration
+    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
 }
 
 include(":app")
