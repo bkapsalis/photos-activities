@@ -128,49 +128,79 @@ workflows:
             - internal-testers
 
   # ── Production Release ─────────────────────────────────
+  # Started by hand, from `main`. Android's App Bundle is kept as an artifact
+  # to upload to Google Play by hand (Play takes an app's first upload only
+  # that way), iOS goes to App Store Connect (app "Bill's Bay Area Fun
+  # Activities"), and the web app to photos-activities-prod.web.app.
+  #
+  # Needs, in Codemagic: the Android keystore "bills_upload_key"; the App
+  # Store Connect API key "bills_asc_key", and an App Store provisioning
+  # profile for com.billsbayarea.app in Code signing identities; and the
+  # variable groups "prod" (FIREBASE_SERVICE_ACCOUNT, the codemagic-prod
+  # service account's JSON key) and "maps".
   prod-release:
     name: Production Release
-    max_build_duration: 60
-    triggering:
-      events:
-        - tag
-      tag_patterns:
-        - pattern: 'v*'
-          include: true
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: bills_asc_key
     environment:
-      flutter: stable
+      flutter: 3.47.9
+      xcode: latest
       groups:
-        - firebase_credentials
-        - android_signing
-        - ios_signing
-        - play_store
-        - app_store
+        - prod
+        - maps
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.billsbayarea.app
+      android_signing:
+        - bills_upload_key
     scripts:
       - name: Get dependencies
         script: flutter pub get
+      - name: Check and write the Maps keys
+        script: |
+          for v in MAPS_API_KEY_ANDROID MAPS_API_KEY_IOS; do
+            if [ -z "${!v}" ]; then
+              echo "Missing $v: add it to the 'maps' variable group in Codemagic."
+              exit 1
+            fi
+          done
+          echo "MAPS_API_KEY=$MAPS_API_KEY_IOS" > ios/Flutter/Maps.xcconfig
       - name: Analyze
         script: flutter analyze --no-fatal-infos
       - name: Run tests
         script: flutter test
       - name: Build Android App Bundle (Prod)
-        script: flutter build appbundle --flavor prod -t lib/main_prod.dart --release
-      - name: Build iOS (Prod)
+        # Google Play needs each upload's version code to be higher than the
+        # last; this workflow's own build counter gives that.
         script: |
-          flutter build ipa --flavor prod -t lib/main_prod.dart --release \
-            --export-options-plist=/tmp/ExportOptions.plist
+          flutter build appbundle --flavor prod -t lib/main_prod.dart \
+            --release --build-number=$BUILD_NUMBER
+      - name: Apply the iOS signing files to the Xcode project
+        script: xcode-project use-profiles
+      - name: Build iOS IPA (Prod)
+        script: |
+          flutter build ipa --flavor prod -t lib/main_prod.dart \
+            --release --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
       - name: Build Web (Prod)
-        script: flutter build web -t lib/main_prod.dart
+        script: flutter build web -t lib/main_prod.dart --release
+      - name: Publish Web to Firebase Hosting (Prod)
+        script: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$CM_BUILD_DIR/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$CM_BUILD_DIR/firebase-sa.json"
+          command -v firebase >/dev/null || npm install -g firebase-tools
+          firebase deploy --only hosting --project photos-activities-prod \
+            --non-interactive --message "Codemagic build $BUILD_NUMBER"
+          rm -f "$CM_BUILD_DIR/firebase-sa.json"
     artifacts:
       - build/app/outputs/bundle/prodRelease/app-prod-release.aab
       - build/ios/ipa/*.ipa
       - build/web/**
-    # Off for the same reason as staging's publishing. When restoring, start
-    # on the internal track and promote to production by hand.
-    # publishing:
-    #   google_play:
-    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-    #     track: production
-    #   app_store_connect:
-    #     api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-    #     key_id: $APP_STORE_CONNECT_KEY_ID
-    #     issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Lands in TestFlight for internal testers; submitting for App Review
+        # is done by hand in App Store Connect.
+        submit_to_testflight: false
