@@ -10,12 +10,24 @@ import 'photo_sorting.dart';
 /// ranking is what keeps a single very active location from filling the
 /// screen: a location with 200 photos contributes exactly as many as one
 /// with 3.
+///
+/// Only photos in [categories], when given — the app's own, as the feed
+/// shows them. A photo filed under any other category (old seeded sample
+/// data was) would otherwise surface here and nowhere else.
 extension ExplorePicks on List<PhotoPost> {
-  List<PhotoPost> topLikedPerLocation({int perLocation = 2}) {
+  List<PhotoPost> topLikedPerLocation({
+    int perLocation = 2,
+    Iterable<String>? categories,
+  }) {
     if (isEmpty) return const [];
+    final allowed = categories?.map((c) => c.trim().toLowerCase()).toSet();
 
     final byLocation = <String, List<PhotoPost>>{};
     for (final photo in this) {
+      if (allowed != null &&
+          !allowed.contains(photo.category.trim().toLowerCase())) {
+        continue;
+      }
       final name = photo.location.name.trim();
       if (name.isEmpty) continue;
       byLocation.putIfAbsent(name, () => <PhotoPost>[]).add(photo);

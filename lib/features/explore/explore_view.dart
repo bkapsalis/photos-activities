@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
+import '../../core/data/mock_data.dart';
 import '../../core/models/models.dart';
 import '../../core/services/firestore_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -74,7 +75,10 @@ class _ExploreViewState extends State<ExploreView> {
               }
 
               final picks = (snapshot.data ?? const <PhotoPost>[])
-                  .topLikedPerLocation(perLocation: _perLocation);
+                  .topLikedPerLocation(
+                    perLocation: _perLocation,
+                    categories: categories,
+                  );
 
               if (picks.isEmpty) {
                 return const _ExploreMessage(
