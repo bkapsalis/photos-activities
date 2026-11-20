@@ -64,6 +64,17 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
   /// Lets the Home tab scroll the feed back to the top.
   final _feedScrollController = ScrollController();
 
+  /// The whole screen's scroll, header included; see [_scrollableBelowHeight].
+  final _pageScrollController = ScrollController();
+
+  /// Below this height (a phone held sideways) the header scrolls away.
+  /// Every phone held upright is taller.
+  static const _scrollableBelowHeight = 500.0;
+
+  /// Whether the screen was short at the last layout, so turning the phone
+  /// is noticed once rather than on every rebuild.
+  bool _short = false;
+
   /// Home is the only tab with a screen of its own. Profile opens as a pushed
   /// route and Explore/Map have nothing to show yet, so this stays 0 except
   /// while one of those is genuinely selected.
@@ -103,6 +114,7 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
   void dispose() {
     _searchController.dispose();
     _feedScrollController.dispose();
+    _pageScrollController.dispose();
     super.dispose();
   }
 
@@ -117,6 +129,13 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
       _searchController.clear();
     });
     widget.onLocationChanged(null);
+    if (_pageScrollController.hasClients) {
+      _pageScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
     if (_feedScrollController.hasClients) {
       _feedScrollController.animateTo(
         0,
@@ -185,266 +204,345 @@ class _MobileHomeLayoutState extends State<MobileHomeLayout> {
             if (_navIndex != 1)
               KeyedSubtree(
                 key: const ValueKey('feed'),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // App bar area
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            // The title doubles as a Home button, the way a site's
-                            // logo usually does. Same reset as the Home tab.
-                            child: InkWell(
-                              onTap: _resetToHome,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Semantics(
-                                button: true,
-                                label:
-                                    "Bill's Bay Area Fun Activities, return to home",
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                    horizontal: 4,
-                                  ),
-                                  // The full name doesn't fit beside the
-                                  // buttons on a phone, so it takes two lines,
-                                  // as on the website and the sign-in screen.
-                                  child: const Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Bill's Bay Area",
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Fun Activities',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: AppColors.textSecondary,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              // Grid/carousel only applies to the photo feed,
-                              // not the map that shares this header.
-                              if (_navIndex == 0)
-                                ViewModeToggleButton(
-                                  mode: widget.viewMode,
-                                  onPressed: widget.onViewModeToggled,
-                                ),
-                              // Location chat list button
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.forum_outlined,
-                                  size: 24,
-                                ),
-                                tooltip: 'Location Chats',
-                                onPressed: () => showLocationChats(
-                                  context,
-                                  category: currentCategory,
-                                  firestoreService: firestoreService,
-                                  onChatTap: widget.onChatTap,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const AccountButton(size: 36),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Guest prompt — hidden once the account is registered
-                    const GuestBanner(),
-                    const SizedBox(height: 8),
-
-                    // Search bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (val) => setState(
-                          () => _searchQuery = val.trim().toLowerCase(),
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search locations...',
-                          hintStyle: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.divider),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.divider),
-                          ),
-                          filled: true,
-                          fillColor: AppColors.surfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Category tabs
-                    SizedBox(
-                      height: 36,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: categories.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          return CategoryChip(
-                            label: categories[index],
-                            isSelected: index == widget.selectedCategoryIndex,
-                            onTap: () => widget.onCategoryChanged(index),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Photo feed (Firestore Stream)
-                    Expanded(
-                      child: CategoryPhotosBuilder(
-                        category: currentCategory,
-                        builder: (context, categoryPhotos) {
-                          // Tabs are built from every photo in the category so the strip
-                          // stays stable while searching inside one location.
-                          final tabs = LocationTabs.fromPhotos(categoryPhotos);
-                          final activeLocation = tabs.resolve(
-                            widget.selectedLocation,
-                          );
-
-                          var photos = activeLocation == null
-                              ? categoryPhotos
-                              : categoryPhotos
-                                    .where(
-                                      (p) =>
-                                          p.location.name.trim() ==
-                                          activeLocation,
-                                    )
-                                    .toList();
-
-                          // Apply search filter
-                          if (_searchQuery.isNotEmpty) {
-                            photos = photos
-                                .where(
-                                  (p) =>
-                                      p.location.name.toLowerCase().contains(
-                                        _searchQuery,
-                                      ) ||
-                                      (p.location.region
-                                              ?.toLowerCase()
-                                              .contains(_searchQuery) ??
-                                          false),
-                                )
-                                .toList();
-                          }
-
-                          // Most-liked first, within whichever tab is showing.
-                          photos = photos.sortedByPopularity();
-
-                          return Column(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final short =
+                        constraints.maxHeight < _scrollableBelowHeight;
+                    // Turned sideways, go straight to the photos, header
+                    // scrolled away; turned back upright, where nothing
+                    // scrolls, bring the header back.
+                    if (short != _short) {
+                      _short = short;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!_pageScrollController.hasClients) return;
+                        final position = _pageScrollController.position;
+                        _pageScrollController.jumpTo(
+                          short ? position.maxScrollExtent : 0,
+                        );
+                      });
+                    }
+                    return CustomScrollView(
+                      controller: _pageScrollController,
+                      // On a phone held sideways the header alone nearly
+                      // fills the screen, leaving the carousel's large photo
+                      // no room, so there the whole screen scrolls and the
+                      // header can be pushed out of the way.
+                      physics: short
+                          ? const ClampingScrollPhysics()
+                          : const NeverScrollableScrollPhysics(),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              LocationTabBar(
-                                tabs: tabs,
-                                selectedLocation: activeLocation,
-                                onLocationChanged: _changeLocation,
-                                // Bulk delete spans other people's photos: moderators only.
-                                onDeleteLocation: !isAdmin()
-                                    ? null
-                                    : (name) => DeleteLocationDialog.show(
-                                        context,
-                                        category: currentCategory,
-                                        locationName: name,
-                                        photoCount: tabs.counts[name] ?? 0,
-                                      ),
-                              ),
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: FeedUnderMap(
-                                  showMap: _navIndex == 2,
-                                  keepFeed: keepFeed,
-                                  map: PhotoMapView(
-                                    photos: photos,
-                                    onPhotoTap: widget.onPhotoTap,
-                                  ),
-                                  feed: photos.isEmpty
-                                      ? _EmptyFeed(
-                                          searchQuery: _searchQuery,
-                                          scopeLabel:
-                                              activeLocation ?? currentCategory,
-                                        )
-                                      : PhotoFeedView(
-                                          mode: widget.viewMode,
-                                          focusPhotoId: widget.focusPhotoId,
-                                          focusRequest: widget.showFeedRequests,
-                                          photos: photos,
-                                          onPhotoTap: widget.onPhotoTap,
-                                          masonry: PhotoMasonryGrid(
-                                            photos: photos,
-                                            onPhotoTap: widget.onPhotoTap,
-                                            controller: _feedScrollController,
-                                            physics: const BouncingScrollPhysics(
-                                              parent:
-                                                  AlwaysScrollableScrollPhysics(),
+                              // App bar area
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  0,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      // The title doubles as a Home button, the way a site's
+                                      // logo usually does. Same reset as the Home tab.
+                                      child: InkWell(
+                                        onTap: _resetToHome,
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Semantics(
+                                          button: true,
+                                          label:
+                                              "Bill's Bay Area Fun Activities, return to home",
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                              horizontal: 4,
                                             ),
-                                            crossAxisCount: 2,
-                                            spacing: 12,
-                                            padding: const EdgeInsets.fromLTRB(
-                                              16,
-                                              0,
-                                              16,
-                                              24,
+                                            // The full name doesn't fit beside the
+                                            // buttons on a phone, so it takes two lines,
+                                            // as on the website and the sign-in screen.
+                                            child: const Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  "Bill's Bay Area",
+                                                  style: TextStyle(
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    color:
+                                                        AppColors.textPrimary,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Fun Activities',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            focusPhotoId: _gridFocusPending
-                                                ? widget.focusPhotoId
-                                                : null,
-                                            onFocusDone: () =>
-                                                _gridFocusPending = false,
                                           ),
                                         ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        // Grid/carousel only applies to the photo feed,
+                                        // not the map that shares this header.
+                                        if (_navIndex == 0)
+                                          ViewModeToggleButton(
+                                            mode: widget.viewMode,
+                                            onPressed: widget.onViewModeToggled,
+                                          ),
+                                        // Location chat list button
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.forum_outlined,
+                                            size: 24,
+                                          ),
+                                          tooltip: 'Location Chats',
+                                          onPressed: () => showLocationChats(
+                                            context,
+                                            category: currentCategory,
+                                            firestoreService: firestoreService,
+                                            onChatTap: widget.onChatTap,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const AccountButton(size: 36),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const SizedBox(height: 8),
+
+                              // Guest prompt — hidden once the account is registered
+                              const GuestBanner(),
+                              const SizedBox(height: 8),
+
+                              // Search bar
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: TextField(
+                                  controller: _searchController,
+                                  onChanged: (val) => setState(
+                                    () =>
+                                        _searchQuery = val.trim().toLowerCase(),
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Search locations...',
+                                    hintStyle: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.search,
+                                      size: 20,
+                                    ),
+                                    suffixIcon: _searchQuery.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(
+                                              Icons.clear,
+                                              size: 18,
+                                            ),
+                                            onPressed: () {
+                                              _searchController.clear();
+                                              setState(() => _searchQuery = '');
+                                            },
+                                          )
+                                        : null,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: AppColors.divider,
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: AppColors.divider,
+                                      ),
+                                    ),
+                                    filled: true,
+                                    fillColor: AppColors.surfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Category tabs
+                              SizedBox(
+                                height: 36,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  itemCount: categories.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 8),
+                                  itemBuilder: (context, index) {
+                                    return CategoryChip(
+                                      label: categories[index],
+                                      isSelected:
+                                          index == widget.selectedCategoryIndex,
+                                      onTap: () =>
+                                          widget.onCategoryChanged(index),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 14),
                             ],
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                          ),
+                        ),
+
+                        // Photo feed (Firestore Stream). Fills whatever the
+                        // header leaves. On a short screen it is always a
+                        // whole screen tall, running on below the bottom
+                        // edge until the header scrolls away: given only
+                        // what the header leaves there, the carousel's strip
+                        // and caption overflowed and its photo had no room.
+                        SliverFillRemaining(
+                          child: OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minHeight: short ? constraints.maxHeight : null,
+                            maxHeight: short ? constraints.maxHeight : null,
+                            child: CategoryPhotosBuilder(
+                              category: currentCategory,
+                              builder: (context, categoryPhotos) {
+                                // Tabs are built from every photo in the category so the strip
+                                // stays stable while searching inside one location.
+                                final tabs = LocationTabs.fromPhotos(
+                                  categoryPhotos,
+                                );
+                                final activeLocation = tabs.resolve(
+                                  widget.selectedLocation,
+                                );
+
+                                var photos = activeLocation == null
+                                    ? categoryPhotos
+                                    : categoryPhotos
+                                          .where(
+                                            (p) =>
+                                                p.location.name.trim() ==
+                                                activeLocation,
+                                          )
+                                          .toList();
+
+                                // Apply search filter
+                                if (_searchQuery.isNotEmpty) {
+                                  photos = photos
+                                      .where(
+                                        (p) =>
+                                            p.location.name
+                                                .toLowerCase()
+                                                .contains(_searchQuery) ||
+                                            (p.location.region
+                                                    ?.toLowerCase()
+                                                    .contains(_searchQuery) ??
+                                                false),
+                                      )
+                                      .toList();
+                                }
+
+                                // Most-liked first, within whichever tab is showing.
+                                photos = photos.sortedByPopularity();
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    LocationTabBar(
+                                      tabs: tabs,
+                                      selectedLocation: activeLocation,
+                                      onLocationChanged: _changeLocation,
+                                      // Bulk delete spans other people's photos: moderators only.
+                                      onDeleteLocation: !isAdmin()
+                                          ? null
+                                          : (name) => DeleteLocationDialog.show(
+                                              context,
+                                              category: currentCategory,
+                                              locationName: name,
+                                              photoCount:
+                                                  tabs.counts[name] ?? 0,
+                                            ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Expanded(
+                                      child: FeedUnderMap(
+                                        showMap: _navIndex == 2,
+                                        keepFeed: keepFeed,
+                                        map: PhotoMapView(
+                                          photos: photos,
+                                          onPhotoTap: widget.onPhotoTap,
+                                        ),
+                                        feed: photos.isEmpty
+                                            ? _EmptyFeed(
+                                                searchQuery: _searchQuery,
+                                                scopeLabel:
+                                                    activeLocation ??
+                                                    currentCategory,
+                                              )
+                                            : PhotoFeedView(
+                                                mode: widget.viewMode,
+                                                focusPhotoId:
+                                                    widget.focusPhotoId,
+                                                focusRequest:
+                                                    widget.showFeedRequests,
+                                                photos: photos,
+                                                onPhotoTap: widget.onPhotoTap,
+                                                masonry: PhotoMasonryGrid(
+                                                  photos: photos,
+                                                  onPhotoTap: widget.onPhotoTap,
+                                                  controller:
+                                                      _feedScrollController,
+                                                  physics:
+                                                      const BouncingScrollPhysics(
+                                                        parent:
+                                                            AlwaysScrollableScrollPhysics(),
+                                                      ),
+                                                  crossAxisCount: 2,
+                                                  spacing: 12,
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                        16,
+                                                        0,
+                                                        16,
+                                                        24,
+                                                      ),
+                                                  focusPhotoId:
+                                                      _gridFocusPending
+                                                      ? widget.focusPhotoId
+                                                      : null,
+                                                  onFocusDone: () =>
+                                                      _gridFocusPending = false,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             if (keepExplore)
