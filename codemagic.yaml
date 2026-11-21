@@ -128,7 +128,8 @@ workflows:
             - internal-testers
 
   # ── Production Release ─────────────────────────────────
-  # Started by hand, from `main`. Android's App Bundle is kept as an artifact
+  # Started by hand, from `main` (its first step refuses any other branch).
+  # Android's App Bundle is kept as an artifact
   # to upload to Google Play by hand (Play takes an app's first upload only
   # that way), iOS goes to App Store Connect (app "Bill's Bay Area Fun
   # Activities"), and the web app to photos-activities-prod.web.app.
@@ -156,6 +157,15 @@ workflows:
       android_signing:
         - bills_upload_key
     scripts:
+      # The branch is picked by hand when the build is started, and this
+      # workflow publishes to real users, so anything but main stops here.
+      - name: Check the branch is main
+        script: |
+          if [ "$CM_BRANCH" != "main" ]; then
+            echo "Production Release builds only from main, not '$CM_BRANCH'."
+            echo "Start it again with the branch set to main."
+            exit 1
+          fi
       - name: Get dependencies
         script: flutter pub get
       - name: Check and write the Maps keys
