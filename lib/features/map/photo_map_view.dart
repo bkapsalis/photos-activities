@@ -33,6 +33,9 @@ class _PhotoMapViewState extends State<PhotoMapView> {
   bool _building = true;
   GoogleMapController? _controller;
 
+  /// The size the pins were last framed for; see [_refitOnResize].
+  Size? _mapSize;
+
   List<PhotoPost> get _mappable =>
       widget.photos.where((p) => p.location.hasCoordinates).toList();
 
@@ -241,6 +244,29 @@ class _PhotoMapViewState extends State<PhotoMapView> {
       );
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _refitOnResize(constraints.biggest);
+        return _buildMap();
+      },
+    );
+  }
+
+  /// Frames the pins again when the map changes size — a phone turned
+  /// sideways — since a fit holds only for the size it was made at.
+  void _refitOnResize(Size size) {
+    if (size == _mapSize) return;
+    final first = _mapSize == null;
+    _mapSize = size;
+    final controller = _controller;
+    // The first size is fitted by onMapCreated.
+    if (first || controller == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitToPins(controller);
+    });
+  }
+
+  Widget _buildMap() {
     return Stack(
       children: [
         GoogleMap(

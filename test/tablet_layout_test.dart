@@ -1,9 +1,7 @@
-import 'package:bills_bay_area/core/widgets/orientation_policy.dart';
 import 'package:bills_bay_area/core/widgets/shared_widgets.dart';
 import 'package:bills_bay_area/features/home/widgets/web_home_layout.dart';
 import 'package:bills_bay_area/features/picture_chat/picture_chat_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Screen sizes in logical pixels, upright.
@@ -17,58 +15,40 @@ const _foldOpen = Size(701, 841); // Pixel Fold, unfolded
 Size _sideways(Size s) => Size(s.height, s.width);
 
 void main() {
-  group('which way the screen may turn', () {
-    test('a phone is a phone either way up', () {
-      expect(isPhoneSized(_phone), isTrue);
-      expect(isPhoneSized(_sideways(_phone)), isTrue);
-    });
-
-    test('tablets and an unfolded foldable are not', () {
-      for (final size in [_iPadMini, _pixelTablet, _iPad11, _iPad13]) {
-        expect(isPhoneSized(size), isFalse, reason: '$size');
-        expect(isPhoneSized(_sideways(size)), isFalse, reason: '$size');
-      }
-      expect(isPhoneSized(_foldOpen), isFalse);
-    });
-
-    test('phones stay upright; tablets are left free', () {
-      expect(orientationsFor(phone: true), [DeviceOrientation.portraitUp]);
-      expect(orientationsFor(phone: false), isEmpty);
-    });
-
-    testWidgets('the policy tells the platform, and again when a foldable '
-        'opens', (tester) async {
-      final requests = <Object?>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        (call) async {
-          if (call.method == 'SystemChrome.setPreferredOrientations') {
-            requests.add(call.arguments);
-          }
-          return null;
-        },
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          SystemChannels.platform,
-          null,
+  group('phone or wide layout', () {
+    Future<String> layoutAt(WidgetTester tester, Size screen) async {
+      await tester.binding.setSurfaceSize(screen);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: ResponsiveLayout(
+            mobileLayout: Text('phone'),
+            webLayout: Text('wide'),
+          ),
         ),
       );
+      return find.text('phone').evaluate().isNotEmpty ? 'phone' : 'wide';
+    }
 
-      Widget at(Size size) => MediaQuery(
-        data: MediaQueryData(size: size),
-        child: const OrientationPolicy(child: SizedBox()),
-      );
+    testWidgets('a phone keeps the phone layout either way up', (tester) async {
+      expect(await layoutAt(tester, _phone), 'phone');
+      // Wider than the breakpoint, but too short for the wide layout.
+      expect(await layoutAt(tester, _sideways(_phone)), 'phone');
+    });
 
-      await tester.pumpWidget(at(const Size(373, 841))); // folded
-      await tester.pumpWidget(at(_sideways(const Size(373, 841))));
-      await tester.pumpWidget(at(_foldOpen));
-
-      // Turning the folded phone asks nothing new; opening it frees it.
-      expect(requests, [
-        ['DeviceOrientation.portraitUp'],
-        <String>[],
-      ]);
+    testWidgets('tablets and an unfolded foldable get the wide layout', (
+      tester,
+    ) async {
+      for (final size in [_iPadMini, _pixelTablet, _iPad11, _iPad13]) {
+        expect(await layoutAt(tester, size), 'wide', reason: '$size');
+        expect(
+          await layoutAt(tester, _sideways(size)),
+          'wide',
+          reason: '$size',
+        );
+      }
+      expect(await layoutAt(tester, _foldOpen), 'wide');
     });
   });
 

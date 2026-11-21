@@ -293,23 +293,35 @@ class IncludeLocationSwitch extends StatelessWidget {
   }
 }
 
+/// The wide layout for a screen with room for it, the phone layout otherwise.
+///
+/// Width alone is not enough: a phone held sideways is wider than
+/// [breakpoint] but too short for the wide layout's header, sidebar and tabs,
+/// which left the carousel overflowing. It keeps the phone layout, whose
+/// header scrolls out of the way.
 class ResponsiveLayout extends StatelessWidget {
   final Widget mobileLayout;
   final Widget webLayout;
   final double breakpoint;
+
+  /// The least height the wide layout gets. Every phone held sideways is
+  /// shorter; every iPad, either way up, is taller.
+  final double minWideHeight;
 
   const ResponsiveLayout({
     super.key,
     required this.mobileLayout,
     required this.webLayout,
     this.breakpoint = 600,
+    this.minWideHeight = 600,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= breakpoint) {
+        if (constraints.maxWidth >= breakpoint &&
+            constraints.maxHeight >= minWideHeight) {
           return webLayout;
         }
         return mobileLayout;

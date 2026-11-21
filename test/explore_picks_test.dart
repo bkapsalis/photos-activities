@@ -107,6 +107,30 @@ void main() {
     expect(picks.map((p) => p.id), ['real']);
   });
 
+  test('only the app\'s categories, however the names are cased', () {
+    final photos = [
+      _photo(id: 'hike', location: 'Vasona Lake', hearts: 1),
+      _photo(
+        id: 'museum',
+        location: 'Forbes Mill',
+        hearts: 0,
+        category: ' museums - historic sites',
+      ),
+      // Old seeded sample data sat in categories the app no longer has.
+      _photo(
+        id: 'stray',
+        location: 'Marin Headlands',
+        hearts: 167,
+        category: 'Historic Sites',
+      ),
+    ];
+
+    final picks = photos.topLikedPerLocation(
+      categories: ['Hiking Areas', 'Museums - Historic Sites'],
+    );
+    expect(picks.map((p) => p.id), ['hike', 'museum']);
+  });
+
   test('an empty feed yields no picks', () {
     expect(<PhotoPost>[].topLikedPerLocation(), isEmpty);
   });

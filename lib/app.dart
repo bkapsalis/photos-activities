@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/env_config.dart';
 import 'core/services/analytics_service.dart';
-import 'core/widgets/orientation_policy.dart';
 import 'features/home/home_screen.dart';
 import 'features/location_chat/location_chat_screen.dart';
 import 'features/picture_chat/picture_chat_screen.dart';
@@ -19,7 +18,6 @@ class BillsBayAreaApp extends StatelessWidget {
       title: EnvConfig.instance.title,
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: EnvConfig.instance.isDev,
-      builder: (context, child) => OrientationPolicy(child: child!),
       home: const _AuthGate(),
     );
   }
