@@ -93,6 +93,14 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+        debug {
+            // Performance Monitoring rewrites every class to time network
+            // calls; for Flutter's debug engine that ran Codemagic's Dev
+            // Build out of memory. Release builds keep it.
+            configure<com.google.firebase.perf.plugin.FirebasePerfExtension> {
+                setInstrumentationEnabled(false)
+            }
+        }
     }
 }
 
