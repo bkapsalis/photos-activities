@@ -2,8 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/models/models.dart';
+import '../../../core/services/firestore_service.dart';
 import '../../../core/services/safety_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/permissions.dart';
+import '../../../core/utils/user_action.dart';
 import '../../../core/widgets/shared_widgets.dart';
 import '../../safety/report_dialog.dart';
 
@@ -34,6 +37,12 @@ class ChatMessageBubble extends StatelessWidget {
     // message is its author's own and someone else's to everyone else.
     final viewer = viewerId ?? auth.FirebaseAuth.instance.currentUser?.uid;
     final isMe = viewer != null && message.user.id == viewer;
+    // Its author, or a moderator, may edit or delete it; everyone else may
+    // report it. A moderator is known only from the signed-in user.
+    final canChange =
+        locationId != null &&
+        message.id.isNotEmpty &&
+        (isMe || (viewerId == null && canModify(message.user.id)));
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -58,7 +67,10 @@ class ChatMessageBubble extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (locationId != null && message.id.isNotEmpty) ...[
+                  if (canChange) ...[
+                    const SizedBox(width: 6),
+                    _MessageMenu(locationId: locationId!, message: message),
+                  ] else if (locationId != null && message.id.isNotEmpty) ...[
                     const SizedBox(width: 6),
                     SafetyMenuButton(
                       target: ReportTarget.chat(locationId!, message),
@@ -142,11 +154,145 @@ class ChatMessageBubble extends StatelessWidget {
                   const SizedBox(width: 8),
                   HeartCount(count: message.reactionCount, iconSize: 13),
                 ],
+                // Your own message has no name row to carry the menu.
+                if (isMe && canChange) ...[
+                  const SizedBox(width: 6),
+                  _MessageMenu(locationId: locationId!, message: message),
+                ],
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Edit or delete a chat message: offered to its author and to moderators,
+/// as a photo's comments are.
+class _MessageMenu extends StatelessWidget {
+  final String locationId;
+  final ChatMessage message;
+
+  const _MessageMenu({required this.locationId, required this.message});
+
+  Future<void> _confirmAndDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.heartRed),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await runUserAction(
+      context,
+      () => FirestoreService().deleteChatMessage(locationId, message.id),
+      failureMessage: 'That message was not deleted. Please try again.',
+    );
+  }
+
+  void _showEditDialog(BuildContext context) {
+    final controller = TextEditingController(text: message.text);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Message ✏️'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          minLines: 3,
+          maxLength: maxPostLength,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: 'Update your message...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty && newText != message.text) {
+                final saved = await runUserAction(
+                  ctx,
+                  () => FirestoreService().updateChatMessage(
+                    locationId,
+                    message.id,
+                    newText,
+                  ),
+                  failureMessage: 'Your edit was not saved. Please try again.',
+                );
+                // Kept open on failure, so the edit is not lost.
+                if (!saved) return;
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(
+        Icons.more_horiz,
+        size: 16,
+        color: AppColors.textSecondary,
+      ),
+      tooltip: 'Edit or delete',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      onSelected: (value) {
+        if (value == 'edit') {
+          _showEditDialog(context);
+        } else if (value == 'delete') {
+          _confirmAndDelete(context);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 16),
+              SizedBox(width: 6),
+              Text('Edit Message'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete, size: 16, color: Colors.red),
+              SizedBox(width: 6),
+              Text('Delete Message', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
