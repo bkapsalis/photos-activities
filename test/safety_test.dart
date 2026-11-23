@@ -237,7 +237,9 @@ void main() {
       expect(find.text('Block Sam'), findsOneWidget);
     });
 
-    testWidgets('your own chat message offers neither', (tester) async {
+    testWidgets('your own chat message offers edit and delete instead', (
+      tester,
+    ) async {
       const message = ChatMessage(
         id: 'm1',
         user: _sam,
@@ -255,7 +257,52 @@ void main() {
           ),
         ),
       );
-      expect(find.byIcon(Icons.more_horiz), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Message'), findsOneWidget);
+      expect(find.text('Delete Message'), findsOneWidget);
+      expect(find.text('Report message'), findsNothing);
+      expect(find.text('Block Sam'), findsNothing);
+    });
+
+    testWidgets('editing a chat message starts from its text', (tester) async {
+      const message = ChatMessage(
+        id: 'm1',
+        user: _sam,
+        text: 'Great trail!',
+        timestamp: 'Just now',
+      );
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: ChatMessageBubble(
+              message: message,
+              viewerId: 'sam',
+              locationId: 'vasona_lake',
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Edit Message'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Message ✏️'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TextField),
+          matching: find.text('Great trail!'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Message ✏️'), findsNothing);
     });
 
     testWidgets('a report needs a reason before it can be sent', (
