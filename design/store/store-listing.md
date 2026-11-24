@@ -159,10 +159,12 @@ Under **Policy → App content → Data safety**:
 | Photos and videos → Photos | Optional | App functionality |
 | Location → Precise location | Optional | App functionality |
 | Location → Approximate location | Required | Analytics |
-| Messages → Other in-app messages (comments, chat) | Optional | App functionality |
+| Messages → Other in-app messages (each place's chat) | Optional | App functionality |
 | App activity → App interactions | Required | Analytics |
+| App activity → Other user-generated content (comments on photos) | Optional | App functionality |
 | App info and performance → Crash logs | Required | App functionality, Analytics |
 | App info and performance → Diagnostics | Required | Analytics |
+| App info and performance → Other app performance data (Performance Monitoring's start-up and network timings) | Required | Analytics |
 | Device or other IDs (Analytics' random ID for the app on the device) | Required | Analytics |
 
 ### Other Play Console forms
