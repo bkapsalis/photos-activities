@@ -8,7 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- No READ_MEDIA_IMAGES: photos come through Android's own pickers,
+         which need no permission, and Google Play allows it only for apps
+         built around the phone's photos, like galleries. Asking for
+         ACCESS_MEDIA_LOCATION still shows the "photos and videos" prompt and
+         grants it: checked 2026-11-24 on the Android 16 emulator, a folder
+         photo kept its GPS. -->
     <!-- Needed to read where a picked photo was taken. Without it Android
          blanks the GPS (camera, time and size still come through), and the
          document picker no longer avoids that: measured 2026-10-17 on the
