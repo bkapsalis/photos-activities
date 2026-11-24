@@ -230,6 +230,22 @@ class FirestoreService {
     await _chatMessagesRef(locationId).add(message.toFirestore());
   }
 
+  /// Changes a chat message's text; the rules let only its author, or a
+  /// moderator, do so, and the AI filter checks the new text as it would a
+  /// new message.
+  Future<void> updateChatMessage(
+    String locationId,
+    String messageId,
+    String newText,
+  ) async {
+    await _chatMessagesRef(locationId).doc(messageId).update({'text': newText});
+  }
+
+  /// Deletes a chat message; its author's or a moderator's to delete.
+  Future<void> deleteChatMessage(String locationId, String messageId) async {
+    await _chatMessagesRef(locationId).doc(messageId).delete();
+  }
+
   // ── Comment Operations (Picture Chat) ──────────────────
 
   CollectionReference _commentsRef(String photoId) =>

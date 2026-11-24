@@ -3,16 +3,19 @@ import 'dart:io' show Platform;
 import 'package:bills_bay_area/features/auth/account_button.dart';
 import 'package:bills_bay_area/features/home/widgets/photo_card.dart';
 import 'package:bills_bay_area/features/home/widgets/view_mode_toggle_button.dart';
-import 'package:bills_bay_area/main_dev.dart' as app;
+import 'package:bills_bay_area/main_dev.dart' as dev;
+import 'package:bills_bay_area/main_prod.dart' as prod;
+import 'package:bills_bay_area/main_staging.dart' as staging;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 /// Pictures of the main screens on whatever device it runs on, upright and
-/// sideways. Against the dev project, as a guest if no one
-/// is signed in. For checking layouts where nothing can be tapped by hand
-/// (the iOS Simulator), and for store screenshots.
+/// sideways. Against the project of the flavor it is built with, as a guest
+/// if no one is signed in. For checking layouts where nothing can be tapped
+/// by hand (the iOS Simulator), and for store screenshots: use staging,
+/// which has real photos and, unlike dev, no DEBUG ribbon.
 ///
 ///   flutter drive --flavor dev -t integration_test/screen_tour_test.dart \
 ///     --driver test_driver/screen_tour.dart -d DEVICE_ID
@@ -60,19 +63,25 @@ void main() {
 
     // The app installs crash reporting over the test's error handlers.
     final flutterOnError = FlutterError.onError;
-    app.main();
+    final appMain = switch (appFlavor) {
+      'staging' => staging.main,
+      'prod' => prod.main,
+      _ => dev.main,
+    };
+    appMain();
     await wait(8);
 
     // Handlers back even when a step fails, or the test reports only that
     // they were left replaced, hiding the step's own error.
     try {
+      // Before the first picture, which may be the sign-in screen.
+      if (Platform.isAndroid) await binding.convertFlutterSurfaceToImage();
       final guest = find.text('Continue as Guest');
       if (guest.evaluate().isNotEmpty) {
         await shot('0-sign-in');
         await tester.tap(guest);
         await wait(8);
       }
-      if (Platform.isAndroid) await binding.convertFlutterSurfaceToImage();
 
       // A phone keeps its layout, bottom bar and all, either way up.
       final phone = find.byType(NavigationBar).evaluate().isNotEmpty;
