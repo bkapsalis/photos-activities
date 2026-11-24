@@ -170,9 +170,9 @@ Under **Policy → App content → Data safety**:
 - **Ads:** No ads.
 - **Advertising ID:** No. The Android manifest removes the permission
   that Google Analytics would add, and turns off its collection.
-- **App access:** "All or some functionality is restricted". Explain that
-  guests can use everything except uploading, which is moderator-only during
-  launch, so no login details are needed.
+- **App access:** "All functionality in my app is available without any
+  access restrictions". "Continue as Guest" needs no login details, and
+  uploading is a moderator tool, not part of what users get.
 - **Content rating:** answer **Yes** to "users can interact or exchange
   content" and "users can share content". Answer No to violence, gambling
   and the rest.
