@@ -52,8 +52,8 @@ Under **Grow users → Store presence → Main store listing**:
 | Full description [4000] | the shared description above |
 | App icon | `design/icon/play-store-icon-512.png` |
 | Feature graphic | `design/store/feature-graphic-1024x500.png` |
-| Phone screenshots | `build/store_shots/play-phone/` |
-| 7" and 10" tablet screenshots | `build/store_shots/play-tablet/` |
+| Phone screenshots | `build/store_shots/android-phone/` |
+| 7" and 10" tablet screenshots | `build/store_shots/android-tablet/` |
 
 Under **Store settings**:
 
@@ -163,10 +163,13 @@ Under **Policy → App content → Data safety**:
 | App activity → App interactions | Required | Analytics |
 | App info and performance → Crash logs | Required | App functionality, Analytics |
 | App info and performance → Diagnostics | Required | Analytics |
+| Device or other IDs (Analytics' random ID for the app on the device) | Required | Analytics |
 
 ### Other Play Console forms
 
 - **Ads:** No ads.
+- **Advertising ID:** No. The Android manifest removes the permission
+  that Google Analytics would add, and turns off its collection.
 - **App access:** "All or some functionality is restricted". Explain that
   guests can use everything except uploading, which is moderator-only during
   launch, so no login details are needed.
