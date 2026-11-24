@@ -52,8 +52,8 @@ Under **Grow users → Store presence → Main store listing**:
 | Full description [4000] | the shared description above |
 | App icon | `design/icon/play-store-icon-512.png` |
 | Feature graphic | `design/store/feature-graphic-1024x500.png` |
-| Phone screenshots | `build/store_shots/play-phone/` |
-| 7" and 10" tablet screenshots | `build/store_shots/play-tablet/` |
+| Phone screenshots | `build/store_shots/android-phone/` |
+| 7" and 10" tablet screenshots | `build/store_shots/android-tablet/` |
 
 Under **Store settings**:
 
@@ -159,17 +159,22 @@ Under **Policy → App content → Data safety**:
 | Photos and videos → Photos | Optional | App functionality |
 | Location → Precise location | Optional | App functionality |
 | Location → Approximate location | Required | Analytics |
-| Messages → Other in-app messages (comments, chat) | Optional | App functionality |
+| Messages → Other in-app messages (each place's chat) | Optional | App functionality |
 | App activity → App interactions | Required | Analytics |
+| App activity → Other user-generated content (comments on photos) | Optional | App functionality |
 | App info and performance → Crash logs | Required | App functionality, Analytics |
 | App info and performance → Diagnostics | Required | Analytics |
+| App info and performance → Other app performance data (Performance Monitoring's start-up and network timings) | Required | Analytics |
+| Device or other IDs (Analytics' random ID for the app on the device) | Required | Analytics |
 
 ### Other Play Console forms
 
 - **Ads:** No ads.
-- **App access:** "All or some functionality is restricted". Explain that
-  guests can use everything except uploading, which is moderator-only during
-  launch, so no login details are needed.
+- **Advertising ID:** No. The Android manifest removes the permission
+  that Google Analytics would add, and turns off its collection.
+- **App access:** "All functionality in my app is available without any
+  access restrictions". "Continue as Guest" needs no login details, and
+  uploading is a moderator tool, not part of what users get.
 - **Content rating:** answer **Yes** to "users can interact or exchange
   content" and "users can share content". Answer No to violence, gambling
   and the rest.
